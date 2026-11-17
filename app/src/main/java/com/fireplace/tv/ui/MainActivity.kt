@@ -3,6 +3,7 @@ package com.fireplace.tv.ui
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.FragmentActivity
@@ -16,9 +17,8 @@ import com.fireplace.tv.data.VideoCatalog
 /**
  * D-pad fireplace picker using HorizontalGridView + explicit-size custom cards.
  *
- * Prior blank screen causes on TCL:
- * 1) BrowseSupportFragment + HEADERS_DISABLED → title only, rows never shown
- * 2) ImageCardView without explicit LayoutParams / Leanback theme attrs → 0×0 cells
+ * Edge focus clip (TCL): first/last card zoom must stay inside horizontal padding
+ * with clipToPadding=false on the grid and ancestors.
  */
 class MainActivity : FragmentActivity() {
 
@@ -28,16 +28,25 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        findViewById<ViewGroup>(R.id.main_root).apply {
+            clipChildren = false
+            clipToPadding = false
+        }
+
+        val edgePad = dp(FOCUS_EDGE_PAD_DP)
         carousel = findViewById(R.id.video_carousel)
         carousel.setNumRows(1)
         carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_LOW_EDGE
         carousel.windowAlignmentOffsetPercent = 0f
-        carousel.windowAlignmentOffset = 0
+        // Keep the first item inset so focus scale has room on the left.
+        carousel.windowAlignmentOffset = edgePad
         carousel.itemAlignmentOffsetPercent = 50f
         carousel.clipToPadding = false
         carousel.clipChildren = false
+        carousel.setPadding(edgePad, dp(28f), edgePad, dp(28f))
         carousel.isFocusable = true
         carousel.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        carousel.horizontalSpacing = dp(16f)
 
         val videos = VideoCatalog.videos
         Log.i(TAG, "Catalog size=${videos.size} titles=${videos.map { it.title }}")
@@ -61,8 +70,19 @@ class MainActivity : FragmentActivity() {
                         openPlayer(video)
                     }
                     viewHolder.itemView.setOnFocusChangeListener { v, hasFocus ->
-                        val scale = if (hasFocus) 1.06f else 1f
+                        // Pivot after layout so WRAP_CONTENT cards scale from center.
+                        if (v.width > 0 && v.height > 0) {
+                            v.pivotX = v.width / 2f
+                            v.pivotY = v.height / 2f
+                        }
+                        val scale = if (hasFocus) FOCUS_SCALE else 1f
                         v.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
+                        if (hasFocus) {
+                            val pos = viewHolder.bindingAdapterPosition
+                            if (pos >= 0) {
+                                carousel.smoothScrollToPosition(pos)
+                            }
+                        }
                     }
                 }
             },
@@ -75,7 +95,6 @@ class MainActivity : FragmentActivity() {
             focusFirstCard(objectAdapter.size())
             logCarouselMetrics(objectAdapter.size())
         }
-        // Second pass after layout — MediaTek TV grids sometimes bind late.
         carousel.postDelayed({
             focusFirstCard(objectAdapter.size())
             logCarouselMetrics(objectAdapter.size())
@@ -97,18 +116,15 @@ class MainActivity : FragmentActivity() {
         if (count <= 0) return
         carousel.selectedPosition = 0
         carousel.requestFocus()
+        carousel.scrollToPosition(0)
         carousel.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
-            ?: run {
-                // Force a layout pass then focus.
-                carousel.scrollToPosition(0)
-                carousel.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
-            }
     }
 
     private fun logCarouselMetrics(count: Int) {
         Log.i(
             TAG,
             "carousel w=${carousel.width} h=${carousel.height} " +
+                "padL=${carousel.paddingLeft} padR=${carousel.paddingRight} " +
                 "childCount=${carousel.childCount} adapterCount=$count " +
                 "selected=${carousel.selectedPosition}",
         )
@@ -122,7 +138,18 @@ class MainActivity : FragmentActivity() {
         )
     }
 
+    private fun dp(value: Float): Int {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value,
+            resources.displayMetrics,
+        ).toInt()
+    }
+
     companion object {
         private const val TAG = "FireplaceMain"
+        private const val FOCUS_SCALE = 1.05f
+        /** Enough inset for focus scale on first/last cards (~3% of 320dp + border). */
+        private const val FOCUS_EDGE_PAD_DP = 56f
     }
 }

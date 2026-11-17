@@ -5,8 +5,9 @@
     android:layout_height="match_parent"
     android:background="@drawable/bg_browse"
     android:clipChildren="false"
+    android:clipToPadding="false"
     android:orientation="vertical"
-    android:paddingStart="40dp"
+    android:paddingStart="24dp"
     android:paddingTop="36dp"
     android:paddingEnd="24dp"
     android:paddingBottom="24dp">
@@ -15,6 +16,7 @@
         android:id="@+id/browse_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
         android:text="@string/browse_title"
         android:textColor="@color/fireplace_text"
         android:textSize="36sp"
@@ -24,11 +26,14 @@
         android:id="@+id/browse_subtitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
         android:layout_marginTop="6dp"
         android:text="@string/browse_subtitle"
         android:textColor="@color/fireplace_text_dim"
         android:textSize="18sp" />
 
+    <!-- Extra horizontal padding + clipToPadding=false so 1.06x focus scale
+         on the first/last card is not cropped at the edges (TCL MT5898). -->
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/video_carousel"
         android:layout_width="match_parent"
@@ -39,7 +44,9 @@
         android:clipToPadding="false"
         android:focusable="true"
         android:focusableInTouchMode="true"
-        android:paddingTop="16dp"
-        android:paddingBottom="16dp" />
+        android:paddingStart="48dp"
+        android:paddingEnd="48dp"
+        android:paddingTop="28dp"
+        android:paddingBottom="28dp" />
 
 </LinearLayout>
