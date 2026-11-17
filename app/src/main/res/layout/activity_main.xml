@@ -32,8 +32,7 @@
         android:textColor="@color/fireplace_text_dim"
         android:textSize="18sp" />
 
-    <!-- Edge inset comes from non-focusable adapter spacers + modest padding.
-         Focus uses border only (no horizontal scale). -->
+    <!-- BOTH_EDGE + 48dp padding: first/last cards stay framed, no end void. -->
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/video_carousel"
         android:layout_width="match_parent"
@@ -44,9 +43,9 @@
         android:clipToPadding="true"
         android:focusable="true"
         android:focusableInTouchMode="true"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="32dp"
-        android:paddingBottom="32dp" />
+        android:paddingStart="48dp"
+        android:paddingEnd="48dp"
+        android:paddingTop="36dp"
+        android:paddingBottom="36dp" />
 
 </LinearLayout>

@@ -1,7 +1,6 @@
 package com.fireplace.tv.ui
 
 import android.content.Intent
-import android.graphics.Rect
 import android.os.Bundle
 import android.util.Log
 import android.util.TypedValue
@@ -21,14 +20,17 @@ import com.fireplace.tv.data.VideoCatalog
 /**
  * D-pad fireplace picker.
  *
- * Inset: ItemDecoration on first/last video (no adapter spacers — those broke
- * Leanback focus search after one RIGHT on TCL). Focus: border + slight Y scale only.
+ * Edge framing (TCL):
+ * - [WINDOW_ALIGN_BOTH_EDGE] keeps the first card inset on cold start and the
+ *   last card against the right edge (no giant empty void from LOW_EDGE).
+ * - Symmetric padding is the margin; no ItemDecoration / spacers (those caused
+ *   clip + focus bugs).
+ * - Explicit DPAD selection across all 7 videos; border focus only (no X scale).
  */
 class MainActivity : FragmentActivity() {
 
     private lateinit var carousel: HorizontalGridView
     private lateinit var objectAdapter: ArrayObjectAdapter
-    private var suppressFocusReset: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,44 +42,27 @@ class MainActivity : FragmentActivity() {
         }
 
         val edgePad = dp(EDGE_PAD_DP)
-        val edgeInset = dp(EDGE_ITEM_INSET_DP)
         carousel = findViewById(R.id.video_carousel)
         carousel.setNumRows(1)
-        carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_LOW_EDGE
+
+        // BOTH_EDGE: start → align low (left pad); end → align high (right pad).
+        // LOW_EDGE alone scrolled the last item to the left and left a blank void.
+        carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_BOTH_EDGE
         carousel.windowAlignmentOffsetPercent = 0f
         carousel.windowAlignmentOffset = 0
         carousel.itemAlignmentOffsetPercent = 0f
         carousel.itemAlignmentOffset = 0
         carousel.clipToPadding = true
         carousel.clipChildren = true
-        carousel.setPadding(edgePad, dp(32f), edgePad, dp(32f))
+        carousel.setPadding(edgePad, dp(36f), edgePad, dp(36f))
         carousel.isFocusable = true
         carousel.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-        carousel.horizontalSpacing = dp(20f)
-
-        // Real layout inset on first/last cards (focusable-only adapter).
-        carousel.addItemDecoration(
-            object : RecyclerView.ItemDecoration() {
-                override fun getItemOffsets(
-                    outRect: Rect,
-                    view: View,
-                    parent: RecyclerView,
-                    state: RecyclerView.State,
-                ) {
-                    val pos = parent.getChildAdapterPosition(view)
-                    if (pos == RecyclerView.NO_POSITION) return
-                    val last = state.itemCount - 1
-                    if (pos == 0) outRect.left = edgeInset
-                    if (pos == last && last >= 0) outRect.right = edgeInset
-                }
-            },
-        )
+        carousel.horizontalSpacing = dp(24f)
 
         Log.i(
             TAG,
-            "edgePadDp=$EDGE_PAD_DP edgeInsetDp=$EDGE_ITEM_INSET_DP " +
-                "edgePadPx=$edgePad edgeInsetPx=$edgeInset " +
-                "density=${resources.displayMetrics.density} focusScaleX=1.0 spacers=false",
+            "align=BOTH_EDGE edgePadDp=$EDGE_PAD_DP edgePadPx=$edgePad " +
+                "density=${resources.displayMetrics.density} focusScaleX=1.0",
         )
 
         objectAdapter = ArrayObjectAdapter(VideoCardPresenter()).apply {
@@ -94,7 +79,11 @@ class MainActivity : FragmentActivity() {
                 }
 
                 override fun onBind(viewHolder: ItemBridgeAdapter.ViewHolder) {
-                    val video = viewHolder.item as? FireplaceVideo ?: return
+                    val video = when (val item = viewHolder.item) {
+                        is FireplaceVideo -> item
+                        is CarouselItem.Video -> item.video
+                        else -> return
+                    }
                     viewHolder.itemView.setOnClickListener {
                         Log.i(TAG, "Selected ${video.id} ${video.title}")
                         openPlayer(video)
@@ -110,7 +99,6 @@ class MainActivity : FragmentActivity() {
                             logFocusedScreenBounds(v, viewHolder.bindingAdapterPosition)
                         }
                     }
-                    // Do not call smoothScrollToPosition here — it fights DPAD focus search.
                 }
             },
         )
@@ -125,11 +113,11 @@ class MainActivity : FragmentActivity() {
                     subposition: Int,
                 ) {
                     Log.i(TAG, "selectedPosition=$position / ${objectAdapter.size() - 1}")
+                    child?.itemView?.let { logFocusedScreenBounds(it, position) }
                 }
             },
         )
 
-        // Explicit DPAD navigation so every catalog index is reachable.
         carousel.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
@@ -141,25 +129,19 @@ class MainActivity : FragmentActivity() {
 
         carousel.visibility = View.VISIBLE
 
-        carousel.post {
-            focusIndex(0)
-            logCarouselMetrics()
-        }
-        carousel.postDelayed({
-            if (carousel.selectedPosition < 0) focusIndex(0)
-            logCarouselMetrics()
-        }, 300)
+        // Cold start: wait for layout, then select 0 without overscrolling.
+        carousel.post { settleOnIndex(0, smooth = false) }
+        carousel.postDelayed({ settleOnIndex(0, smooth = false) }, 200)
     }
 
     override fun onResume() {
         super.onResume()
-        // Don't force-reset to first item — that made browsing feel broken.
-        if (::carousel.isInitialized && !suppressFocusReset) {
-            carousel.post {
-                val pos = carousel.selectedPosition.coerceIn(0, (objectAdapter.size() - 1).coerceAtLeast(0))
-                carousel.requestFocus()
-                carousel.findViewHolderForAdapterPosition(pos)?.itemView?.requestFocus()
-            }
+        if (!::carousel.isInitialized || !::objectAdapter.isInitialized) return
+        carousel.post {
+            val last = (objectAdapter.size() - 1).coerceAtLeast(0)
+            val pos = carousel.selectedPosition.coerceIn(0, last)
+            carousel.requestFocus()
+            carousel.findViewHolderForAdapterPosition(pos)?.itemView?.requestFocus()
         }
     }
 
@@ -169,27 +151,30 @@ class MainActivity : FragmentActivity() {
         val current = carousel.selectedPosition.coerceAtLeast(0)
         val target = (current + delta).coerceIn(0, last)
         if (target == current) {
-            Log.i(TAG, "moveSelection delta=$delta at edge pos=$current")
+            Log.i(TAG, "moveSelection at edge pos=$current")
             return true
         }
-        Log.i(TAG, "moveSelection $current -> $target delta=$delta")
-        suppressFocusReset = true
-        carousel.setSelectedPositionSmooth(target)
-        carousel.post {
-            carousel.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
-                ?: carousel.scrollToPosition(target)
-        }
+        Log.i(TAG, "moveSelection $current -> $target")
+        settleOnIndex(target, smooth = true)
         return true
     }
 
-    private fun focusIndex(index: Int) {
+    private fun settleOnIndex(index: Int, smooth: Boolean) {
         val last = objectAdapter.size() - 1
         if (last < 0) return
         val target = index.coerceIn(0, last)
-        carousel.selectedPosition = target
+        if (smooth) {
+            carousel.setSelectedPositionSmooth(target)
+        } else {
+            // Instant settle for cold start — avoids partial first-card clip.
+            carousel.selectedPosition = target
+            carousel.scrollToPosition(target)
+        }
         carousel.requestFocus()
-        carousel.scrollToPosition(target)
-        carousel.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+        carousel.post {
+            carousel.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+            logCarouselMetrics()
+        }
     }
 
     private fun logFocusedScreenBounds(view: View, position: Int) {
@@ -205,15 +190,17 @@ class MainActivity : FragmentActivity() {
 
     private fun logCarouselMetrics() {
         val first = carousel.findViewHolderForAdapterPosition(0)?.itemView
-        val loc = IntArray(2)
-        first?.getLocationOnScreen(loc)
+        val lastIdx = objectAdapter.size() - 1
+        val last = if (lastIdx >= 0) carousel.findViewHolderForAdapterPosition(lastIdx)?.itemView else null
+        val firstLoc = IntArray(2)
+        val lastLoc = IntArray(2)
+        first?.getLocationOnScreen(firstLoc)
+        last?.getLocationOnScreen(lastLoc)
         Log.i(
             TAG,
-            "carousel w=${carousel.width} h=${carousel.height} " +
-                "padL=${carousel.paddingLeft} padR=${carousel.paddingRight} " +
-                "childCount=${carousel.childCount} adapterCount=${objectAdapter.size()} " +
-                "selected=${carousel.selectedPosition} " +
-                "firstScreenX1=${first?.let { loc[0] }}",
+            "carousel w=${carousel.width} padL=${carousel.paddingLeft} padR=${carousel.paddingRight} " +
+                "adapterCount=${objectAdapter.size()} selected=${carousel.selectedPosition} " +
+                "firstX1=${first?.let { firstLoc[0] }} lastX2=${last?.let { lastLoc[0] + it.width }}",
         )
     }
 
@@ -236,8 +223,7 @@ class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "FireplaceMain"
         private const val FOCUS_SCALE_Y = 1.02f
-        private const val EDGE_PAD_DP = 24f
-        /** Extra first/last item inset so focused x1 ≳ 80–120 @ density 2. */
-        private const val EDGE_ITEM_INSET_DP = 56f
+        /** Symmetric window padding — focus border + clear margin (~96px @ density 2). */
+        private const val EDGE_PAD_DP = 48f
     }
 }
