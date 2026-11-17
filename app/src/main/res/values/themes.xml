@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- AppCompat base avoids Leanback Browse chrome that only painted the title. -->
-    <style name="Theme.FireplaceTV" parent="Theme.AppCompat.NoActionBar">
+    <!-- Leanback parent keeps TV focus/selection attrs; we do not use BrowseSupportFragment. -->
+    <style name="Theme.FireplaceTV" parent="Theme.Leanback">
         <item name="android:windowBackground">@drawable/bg_browse</item>
         <item name="android:colorPrimary">@color/fireplace_ember</item>
         <item name="android:colorAccent">@color/fireplace_glow</item>
         <item name="android:windowFullscreen">true</item>
-        <item name="colorPrimary">@color/fireplace_ember</item>
-        <item name="colorPrimaryDark">@color/fireplace_bg</item>
-        <item name="colorAccent">@color/fireplace_glow</item>
+        <item name="defaultBrandColor">@color/fireplace_bg_mid</item>
+        <item name="defaultBrandColorDark">@color/fireplace_bg</item>
     </style>
 
     <style name="Theme.FireplaceTV.Player" parent="Theme.AppCompat.NoActionBar">
