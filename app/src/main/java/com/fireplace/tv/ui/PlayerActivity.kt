@@ -224,7 +224,11 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun handleResolveFailure(error: Throwable) {
+        val text = (error.message.orEmpty() + " " + (error.cause?.message.orEmpty())).lowercase()
         val message = when {
+            "not a bot" in text || "login_required" in text || "signinconfirm" in
+                error.javaClass.simpleName.lowercase() ->
+                getString(R.string.error_bot_check)
             error is IOException || error.cause is IOException ->
                 getString(R.string.error_network)
             else -> getString(R.string.error_extractor)

@@ -7,6 +7,7 @@
     <string name="error_generic">Could not play this fireplace.</string>
     <string name="error_network">Network error. Check connection and try again.</string>
     <string name="error_extractor">Stream unavailable. Press Back to choose another.</string>
+    <string name="error_bot_check">YouTube blocked this network (bot check). Try again on your home Wi‑Fi.</string>
     <string name="error_hint">Press Back to return</string>
     <string name="live_badge">LIVE</string>
 </resources>
