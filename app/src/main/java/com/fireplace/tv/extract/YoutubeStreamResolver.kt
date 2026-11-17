@@ -32,6 +32,7 @@ class YoutubeStreamResolver {
 
         val extractorLive = info.streamType == StreamType.LIVE_STREAM ||
             info.streamType == StreamType.POST_LIVE_STREAM
+        // Catalog/expectLive wins: NewPipe sometimes labels live fireplace HLS as non-LIVE.
         val isLive = expectLive || extractorLive
 
         val hls = info.hlsUrl.takeIf { it.isNotBlank() }
@@ -39,6 +40,7 @@ class YoutubeStreamResolver {
         Log.i(
             TAG,
             "meta id=${info.id} streamType=${info.streamType} expectLive=$expectLive " +
+                "extractorLive=$extractorLive effectiveLive=$isLive " +
                 "hls=${hls != null} dash=${dash != null} " +
                 "v=${info.videoStreams.size} vo=${info.videoOnlyStreams.size} a=${info.audioStreams.size}",
         )
@@ -52,7 +54,8 @@ class YoutubeStreamResolver {
 
         Log.i(
             TAG,
-            "Resolved ${info.id}: live=$isLive source=${playback::class.simpleName} height=$height",
+            "Resolved ${info.id}: live=$isLive (expect=$expectLive extractor=$extractorLive) " +
+                "source=${playback::class.simpleName} height=$height",
         )
 
         return ResolvedStream(
@@ -106,29 +109,48 @@ class YoutubeStreamResolver {
             .filter { it.content.isNotBlank() }
             .filter { it.height in 1..MAX_HEIGHT }
             .sortedWith(
-                compareByDescending<VideoStream> { it.height }
+                compareByDescending<VideoStream> { codecPreference(it) }
+                    .thenByDescending { it.height }
                     .thenByDescending { it.bitrate },
             )
             .firstOrNull()
     }
 
     private fun bestVideoOnly(streams: List<VideoStream>): VideoStream? {
+        val ranked = compareByDescending<VideoStream> { codecPreference(it) }
+            .thenByDescending { it.height }
+            .thenByDescending { it.bitrate }
         return streams
             .asSequence()
             .filter { it.content.isNotBlank() }
             .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
             .filter { it.height in 1..MAX_HEIGHT }
-            .sortedWith(
-                compareByDescending<VideoStream> { it.height }
-                    .thenByDescending { it.bitrate },
-            )
+            .sortedWith(ranked)
             .firstOrNull()
             ?: streams
                 .asSequence()
                 .filter { it.content.isNotBlank() }
                 .filter { it.height in 1..MAX_HEIGHT }
-                .sortedByDescending { it.height }
+                .sortedWith(ranked)
                 .firstOrNull()
+    }
+
+    /** Prefer AVC, then HEVC, demote VP9/AV1 for MediaTek TV stability. */
+    private fun codecPreference(stream: VideoStream): Int {
+        val hay = buildString {
+            append(stream.codec.orEmpty())
+            append(' ')
+            append(stream.format?.toString().orEmpty())
+            append(' ')
+            append(stream.content)
+        }.lowercase()
+        return when {
+            "avc" in hay || "h264" in hay || "avc1" in hay -> 3
+            "hev" in hay || "hvc1" in hay || "h265" in hay || "hevc" in hay -> 2
+            "vp9" in hay || "vp09" in hay -> 0
+            "av01" in hay || "av1" in hay -> 0
+            else -> 1
+        }
     }
 
     private fun bestAudio(streams: List<AudioStream>): AudioStream? {

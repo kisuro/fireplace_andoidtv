@@ -10,6 +10,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -21,6 +22,7 @@ import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.PlayerView
 import com.fireplace.tv.R
@@ -30,6 +32,8 @@ import com.fireplace.tv.extract.OkHttpDownloader
 import com.fireplace.tv.extract.PlaybackSource
 import com.fireplace.tv.extract.ResolvedStream
 import com.fireplace.tv.extract.YoutubeStreamResolver
+import com.fireplace.tv.playback.FireplacePlayerFactory
+import com.fireplace.tv.playback.Vp9Policy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,13 +53,16 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var statusHint: TextView
 
     private var player: ExoPlayer? = null
+    private var trackSelector: DefaultTrackSelector? = null
     private var video: FireplaceVideo? = null
+    private var lastResolved: ResolvedStream? = null
     private var resolveJob: Job? = null
     private var liveRefreshJob: Job? = null
     private var recoveryJob: Job? = null
     private var isLivePlayback: Boolean = false
     private var consecutiveFailures: Int = 0
     private var playbackGeneration: Int = 0
+    private var vp9Policy: Vp9Policy = Vp9Policy.DEMOTE_MTK_VP9
 
     private val resolver = YoutubeStreamResolver()
 
@@ -91,7 +98,7 @@ class PlayerActivity : AppCompatActivity() {
             },
         )
 
-        Log.i(TAG, "open videoId=${video?.id} yt=${video?.youtubeId} live=${video?.isLive}")
+        Log.i(TAG, "open videoId=${video?.id} yt=${video?.youtubeId} catalogLive=${video?.isLive}")
         startPlayback(reason = "launch")
     }
 
@@ -115,7 +122,8 @@ class PlayerActivity : AppCompatActivity() {
         val generation = ++playbackGeneration
 
         resolveJob = lifecycleScope.launch {
-            val maxAttempts = if (current.isLive) MAX_LIVE_RESOLVE_ATTEMPTS else MAX_VOD_RESOLVE_ATTEMPTS
+            val catalogLive = current.isLive
+            val maxAttempts = if (catalogLive) MAX_LIVE_RESOLVE_ATTEMPTS else MAX_VOD_RESOLVE_ATTEMPTS
             var lastError: Exception? = null
 
             for (attempt in 1..maxAttempts) {
@@ -123,23 +131,26 @@ class PlayerActivity : AppCompatActivity() {
                 try {
                     if (attempt > 1) {
                         val backoff = backoffMs(attempt - 1)
-                        Log.i(TAG, "retry resolve attempt=$attempt/$maxAttempts backoffMs=$backoff reason=$reason")
+                        Log.i(TAG, "retry resolve attempt=$attempt/$maxAttempts backoffMs=$backoff reason=$reason vp9=$vp9Policy")
                         showLoading(getString(R.string.retrying_stream))
                         delay(backoff)
                     }
 
                     val resolved = withContext(Dispatchers.IO) {
-                        resolver.resolve(current.watchUrl, expectLive = current.isLive)
+                        // Catalog live always wins — NewPipe sometimes reports VOD-like for live HLS.
+                        resolver.resolve(current.watchUrl, expectLive = catalogLive)
                     }
                     if (!isActive || generation != playbackGeneration) return@launch
 
-                    isLivePlayback = resolved.isLive || current.isLive
+                    isLivePlayback = catalogLive || resolved.isLive
+                    lastResolved = resolved.copy(isLive = isLivePlayback)
                     Log.i(
                         TAG,
-                        "bind ok attempt=$attempt live=$isLivePlayback " +
-                            "source=${resolved.playback::class.simpleName} yt=${resolved.youtubeId}",
+                        "bind ok attempt=$attempt catalogLive=$catalogLive resolvedLive=${resolved.isLive} " +
+                            "effectiveLive=$isLivePlayback source=${resolved.playback::class.simpleName} " +
+                            "yt=${resolved.youtubeId} vp9=$vp9Policy",
                     )
-                    bindPlayer(resolved, generation)
+                    bindPlayer(lastResolved!!, generation)
                     consecutiveFailures = 0
                     if (isLivePlayback) {
                         scheduleLiveRefresh(generation)
@@ -161,7 +172,10 @@ class PlayerActivity : AppCompatActivity() {
             }
 
             Log.e(TAG, "resolve exhausted reason=$reason live=${current.isLive}", lastError)
-            handleResolveFailure(lastError ?: IllegalStateException("resolve failed"), soft = current.isLive)
+            handleResolveFailure(
+                lastError ?: IllegalStateException("resolve failed"),
+                soft = current.isLive,
+            )
         }
     }
 
@@ -188,7 +202,6 @@ class PlayerActivity : AppCompatActivity() {
                     .createMediaSource(MediaItem.fromUri(source.url))
             }
             is PlaybackSource.Merged -> {
-                // Avoid for live; VOD last resort only.
                 val progressive = ProgressiveMediaSource.Factory(dataSourceFactory)
                     .setLoadErrorHandlingPolicy(loadPolicy)
                 MergingMediaSource(
@@ -199,29 +212,18 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                /* minBufferMs */ 5_000,
-                /* maxBufferMs */ 50_000,
-                /* bufferForPlaybackMs */ 1_500,
-                /* bufferForPlaybackAfterRebufferMs */ 3_000,
-            )
+            .setBufferDurationsMs(5_000, 50_000, 1_500, 3_000)
             .build()
 
-        val exo = ExoPlayer.Builder(this)
-            .setLoadControl(loadControl)
-            .build()
-            .also { player = it }
+        val (exo, selector) = FireplacePlayerFactory.create(this, vp9Policy, loadControl)
+        player = exo
+        trackSelector = selector
         playerView.player = exo
         exo.addListener(playerListener)
         exo.setMediaSource(mediaSource)
-        exo.repeatMode = if (isLivePlayback) {
-            Player.REPEAT_MODE_OFF
-        } else {
-            Player.REPEAT_MODE_ALL
-        }
+        exo.repeatMode = if (isLivePlayback) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL
         exo.playWhenReady = true
         exo.prepare()
-        // Stay on loading until STATE_READY so a bad URL doesn't flash blank then error.
         showLoading(getString(R.string.loading_stream))
     }
 
@@ -243,21 +245,59 @@ class PlayerActivity : AppCompatActivity() {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
+                logSelectedVideoFormat()
                 hideOverlay()
             }
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            val cause = error.cause
+            val formatHint = error.message.orEmpty() + " " + (error.cause?.message.orEmpty())
+            val isVp9Decode = error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED &&
+                ("vp9" in formatHint.lowercase() ||
+                    "vp09" in formatHint.lowercase() ||
+                    "on2.vp9" in formatHint.lowercase() ||
+                    "mtk.vp9" in formatHint.lowercase())
+
             Log.e(
                 TAG,
                 "player error code=${error.errorCodeName}(${error.errorCode}) " +
-                    "cause=${cause?.javaClass?.simpleName} msg=${error.message}",
+                    "vp9Decode=$isVp9Decode policy=$vp9Policy " +
+                    "cause=${error.cause?.javaClass?.simpleName} msg=${error.message}",
                 error,
             )
+
+            // Prefer silent codec fallback before any error UI.
+            if (isVp9Decode || error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED) {
+                if (vp9Policy != Vp9Policy.BAN_VP9) {
+                    vp9Policy = Vp9Policy.BAN_VP9
+                    Log.w(TAG, "DECODING_FAILED → escalate to BAN_VP9 and rebind without error UI")
+                    showLoading(getString(R.string.retrying_stream))
+                    val resolved = lastResolved
+                    if (resolved != null) {
+                        bindPlayer(resolved, playbackGeneration)
+                    } else {
+                        startPlayback(reason = "decode_fail_ban_vp9")
+                    }
+                    return
+                }
+            }
+
             consecutiveFailures++
-            // Re-resolve immediately with backoff path — never sit on a dead URL for live.
             startPlayback(reason = "player_error:${error.errorCodeName}")
+        }
+    }
+
+    private fun logSelectedVideoFormat() {
+        val exo = player ?: return
+        val format = exo.videoFormat
+        Log.i(
+            TAG,
+            "playing mime=${format?.sampleMimeType} codecs=${format?.codecs} " +
+                "size=${format?.width}x${format?.height} fps=${format?.frameRate} " +
+                "bitrate=${format?.bitrate} vp9Policy=$vp9Policy",
+        )
+        if (format?.sampleMimeType == MimeTypes.VIDEO_VP9) {
+            Log.w(TAG, "VP9 still selected after policy=$vp9Policy — unexpected on MTK")
         }
     }
 
@@ -267,18 +307,24 @@ class PlayerActivity : AppCompatActivity() {
             while (isActive && generation == playbackGeneration) {
                 delay(LIVE_REFRESH_INTERVAL_MS)
                 if (generation != playbackGeneration) return@launch
-                Log.i(TAG, "proactive live URL refresh")
+                // Catalog live always refreshes even if extractor said live=false.
                 val current = video ?: return@launch
+                if (!current.isLive && !isLivePlayback) {
+                    Log.i(TAG, "skip live refresh (not live)")
+                    return@launch
+                }
+                Log.i(TAG, "proactive live URL refresh catalogLive=${current.isLive}")
                 try {
                     val resolved = withContext(Dispatchers.IO) {
                         resolver.resolve(current.watchUrl, expectLive = true)
                     }
                     if (!isActive || generation != playbackGeneration) return@launch
-                    // Seamless-ish: only rebind if still live adaptive.
-                    if (resolved.playback is PlaybackSource.Hls ||
-                        resolved.playback is PlaybackSource.Dash
+                    val effective = resolved.copy(isLive = true)
+                    lastResolved = effective
+                    if (effective.playback is PlaybackSource.Hls ||
+                        effective.playback is PlaybackSource.Dash
                     ) {
-                        bindPlayer(resolved, generation)
+                        bindPlayer(effective, generation)
                     }
                 } catch (e: Exception) {
                     Log.w(
@@ -311,9 +357,9 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         Log.e(TAG, "show error soft=$soft msg=$message detail=$text")
-        showError(message, allowAutoRecover = soft || isLivePlayback)
+        showError(message, allowAutoRecover = soft || isLivePlayback || video?.isLive == true)
 
-        if (soft || isLivePlayback) {
+        if (soft || isLivePlayback || video?.isLive == true) {
             scheduleSoftRecovery()
         }
     }
@@ -328,10 +374,12 @@ class PlayerActivity : AppCompatActivity() {
                 Log.i(TAG, "soft recovery scheduled in ${wait}ms attempt=$attempt")
                 delay(wait)
                 if (!isActive) return@launch
-                // Keep UI in retry mode rather than permanent dead error.
                 showLoading(getString(R.string.retrying_stream))
+                // Soft recovery also tries AVC-only.
+                if (vp9Policy != Vp9Policy.BAN_VP9) {
+                    vp9Policy = Vp9Policy.BAN_VP9
+                }
                 startPlayback(reason = "soft_recovery_$attempt")
-                // startPlayback cancels this job; if it returns to error it will reschedule.
                 return@launch
             }
         }
@@ -369,6 +417,7 @@ class PlayerActivity : AppCompatActivity() {
         player?.removeListener(playerListener)
         player?.release()
         player = null
+        trackSelector = null
         if (!keepJobs) {
             resolveJob?.cancel()
             liveRefreshJob?.cancel()
@@ -379,7 +428,6 @@ class PlayerActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_VIDEO_ID = "video_id"
         private const val TAG = "FireplacePlayer"
-        /** YouTube live manifests expire far sooner than hours. */
         private const val LIVE_REFRESH_INTERVAL_MS = 8 * 60 * 1000L
         private const val MAX_LIVE_RESOLVE_ATTEMPTS = 6
         private const val MAX_VOD_RESOLVE_ATTEMPTS = 4
