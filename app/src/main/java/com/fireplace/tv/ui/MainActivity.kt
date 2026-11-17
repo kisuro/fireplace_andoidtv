@@ -15,10 +15,8 @@ import com.fireplace.tv.data.FireplaceVideo
 import com.fireplace.tv.data.VideoCatalog
 
 /**
- * D-pad fireplace picker using HorizontalGridView + explicit-size custom cards.
- *
- * Edge focus clip (TCL): first/last card zoom must stay inside horizontal padding
- * with clipToPadding=false on the grid and ancestors.
+ * D-pad fireplace picker. Edge cards need large horizontal padding so focus
+ * scale/halo is not clipped (TCL v1.0.3 still clipped at ~48px inset).
  */
 class MainActivity : FragmentActivity() {
 
@@ -28,6 +26,15 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Disable clipping up the tree (content + decor).
+        (window.decorView as? ViewGroup)?.let { decor ->
+            decor.clipChildren = false
+            decor.clipToPadding = false
+            (decor.findViewById<ViewGroup>(android.R.id.content))?.let { content ->
+                content.clipChildren = false
+                content.clipToPadding = false
+            }
+        }
         findViewById<ViewGroup>(R.id.main_root).apply {
             clipChildren = false
             clipToPadding = false
@@ -38,15 +45,18 @@ class MainActivity : FragmentActivity() {
         carousel.setNumRows(1)
         carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_LOW_EDGE
         carousel.windowAlignmentOffsetPercent = 0f
-        // Keep the first item inset so focus scale has room on the left.
-        carousel.windowAlignmentOffset = edgePad
-        carousel.itemAlignmentOffsetPercent = 50f
+        // Align first item to the padded edge (offset 0 — padding itself is the inset).
+        carousel.windowAlignmentOffset = 0
+        carousel.itemAlignmentOffsetPercent = 0f
+        carousel.itemAlignmentOffset = 0
         carousel.clipToPadding = false
         carousel.clipChildren = false
-        carousel.setPadding(edgePad, dp(28f), edgePad, dp(28f))
+        carousel.setPadding(edgePad, dp(32f), edgePad, dp(32f))
         carousel.isFocusable = true
         carousel.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-        carousel.horizontalSpacing = dp(16f)
+        carousel.horizontalSpacing = dp(20f)
+
+        Log.i(TAG, "edgePadDp=$FOCUS_EDGE_PAD_DP edgePadPx=$edgePad density=${resources.displayMetrics.density}")
 
         val videos = VideoCatalog.videos
         Log.i(TAG, "Catalog size=${videos.size} titles=${videos.map { it.title }}")
@@ -70,11 +80,11 @@ class MainActivity : FragmentActivity() {
                         openPlayer(video)
                     }
                     viewHolder.itemView.setOnFocusChangeListener { v, hasFocus ->
-                        // Pivot after layout so WRAP_CONTENT cards scale from center.
                         if (v.width > 0 && v.height > 0) {
                             v.pivotX = v.width / 2f
                             v.pivotY = v.height / 2f
                         }
+                        // Modest scale — orange focus stroke on the drawable carries most feedback.
                         val scale = if (hasFocus) FOCUS_SCALE else 1f
                         v.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
                         if (hasFocus) {
@@ -121,12 +131,14 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun logCarouselMetrics(count: Int) {
+        val first = carousel.findViewHolderForAdapterPosition(0)?.itemView
         Log.i(
             TAG,
             "carousel w=${carousel.width} h=${carousel.height} " +
                 "padL=${carousel.paddingLeft} padR=${carousel.paddingRight} " +
                 "childCount=${carousel.childCount} adapterCount=$count " +
-                "selected=${carousel.selectedPosition}",
+                "selected=${carousel.selectedPosition} " +
+                "firstBounds=${first?.let { "[${it.left},${it.top}][${it.right},${it.bottom}]" }}",
         )
     }
 
@@ -148,8 +160,8 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         private const val TAG = "FireplaceMain"
-        private const val FOCUS_SCALE = 1.05f
-        /** Enough inset for focus scale on first/last cards (~3% of 320dp + border). */
-        private const val FOCUS_EDGE_PAD_DP = 56f
+        /** Small zoom; 120dp padding absorbs overflow + focus stroke. */
+        private const val FOCUS_SCALE = 1.03f
+        private const val FOCUS_EDGE_PAD_DP = 120f
     }
 }
