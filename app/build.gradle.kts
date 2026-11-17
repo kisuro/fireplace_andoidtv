@@ -11,8 +11,8 @@ android {
         applicationId = "com.fireplace.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.0.9"
+        versionCode = 10
+        versionName = "1.0.10"
     }
 
     buildTypes {
