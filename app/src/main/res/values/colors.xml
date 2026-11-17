@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fireplace_bg">#0B0705</color>
+    <color name="fireplace_bg_mid">#1A0E08</color>
+    <color name="fireplace_ember">#C45A24</color>
+    <color name="fireplace_glow">#E8A15A</color>
+    <color name="fireplace_text">#F3E6D4</color>
+    <color name="fireplace_text_dim">#A8917A</color>
+    <color name="fireplace_card">#22140C</color>
+    <color name="fireplace_focus">#FF8A3D</color>
+    <color name="black">#000000</color>
+</resources>

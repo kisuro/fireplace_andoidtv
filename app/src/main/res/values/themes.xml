@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FireplaceTV" parent="Theme.Leanback">
+        <item name="android:windowBackground">@color/fireplace_bg</item>
+        <item name="android:colorPrimary">@color/fireplace_ember</item>
+        <item name="android:colorAccent">@color/fireplace_glow</item>
+        <item name="defaultBrandColor">@color/fireplace_bg_mid</item>
+        <item name="defaultBrandColorDark">@color/fireplace_bg</item>
+        <item name="browseTitleTextStyle">@style/FireplaceBrowseTitle</item>
+    </style>
+
+    <style name="Theme.FireplaceTV.Player" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+
+    <style name="FireplaceBrowseTitle" parent="TextAppearance.Leanback.Title">
+        <item name="android:textColor">@color/fireplace_text</item>
+        <item name="android:textSize">34sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+</resources>
