@@ -1,5 +1,6 @@
 package com.fireplace.tv.ui
 
+import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -13,6 +14,8 @@ import com.fireplace.tv.data.FireplaceVideo
 /**
  * Plain layout cards (not Leanback ImageCardView) so BaseGridView always gets
  * non-zero measured size even without Theme.Leanback card attributes.
+ *
+ * Adapter items are [CarouselItem.Video] wrappers (with edge spacers in the same list).
  */
 class VideoCardPresenter : Presenter() {
 
@@ -38,7 +41,10 @@ class VideoCardPresenter : Presenter() {
     }
 
     override fun onBindViewHolder(viewHolder: ViewHolder, item: Any) {
-        val video = item as FireplaceVideo
+        val video = unwrapVideo(item) ?: run {
+            Log.e(TAG, "Unexpected item type: ${item.javaClass.name}")
+            return
+        }
         val root = viewHolder.view
         val image = root.findViewById<ImageView>(R.id.card_image)
         val title = root.findViewById<TextView>(R.id.card_title)
@@ -70,7 +76,16 @@ class VideoCardPresenter : Presenter() {
         viewHolder.view.findViewById<ImageView>(R.id.card_image)?.setImageDrawable(null)
     }
 
+    private fun unwrapVideo(item: Any): FireplaceVideo? {
+        return when (item) {
+            is FireplaceVideo -> item
+            is CarouselItem.Video -> item.video
+            else -> null
+        }
+    }
+
     companion object {
+        private const val TAG = "FireplaceMain"
         private const val CARD_WIDTH_DP = 320f
     }
 }

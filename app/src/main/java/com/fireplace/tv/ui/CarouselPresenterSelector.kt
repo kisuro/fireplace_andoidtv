@@ -2,6 +2,7 @@ package com.fireplace.tv.ui
 
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.PresenterSelector
+import com.fireplace.tv.data.FireplaceVideo
 
 class CarouselPresenterSelector(
     private val videoPresenter: VideoCardPresenter = VideoCardPresenter(),
@@ -12,7 +13,8 @@ class CarouselPresenterSelector(
         return when (item) {
             is CarouselItem.EdgeSpacer -> spacerPresenter
             is CarouselItem.Video -> videoPresenter
-            else -> videoPresenter
+            is FireplaceVideo -> videoPresenter
+            else -> spacerPresenter // never bind unknown types as video cards
         }
     }
 
