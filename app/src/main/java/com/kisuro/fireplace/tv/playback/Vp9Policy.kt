@@ -1,4 +1,4 @@
-package com.fireplace.tv.playback
+package com.kisuro.fireplace.tv.playback
 
 /**
  * MediaTek MT5898 (`c2.mtk.vp9.decoder`) intermittently crashes on 1080p60 VP9.

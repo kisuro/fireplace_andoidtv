@@ -1,6 +1,6 @@
-package com.fireplace.tv.ui
+package com.kisuro.fireplace.tv.ui
 
-import com.fireplace.tv.data.FireplaceVideo
+import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 sealed class CarouselItem {
     data object EdgeSpacer : CarouselItem()

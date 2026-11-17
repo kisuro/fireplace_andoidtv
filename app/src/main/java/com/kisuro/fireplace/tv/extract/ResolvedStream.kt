@@ -1,4 +1,4 @@
-package com.fireplace.tv.extract
+package com.kisuro.fireplace.tv.extract
 
 data class ResolvedStream(
     val youtubeId: String,

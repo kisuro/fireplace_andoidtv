@@ -1,4 +1,4 @@
-package com.fireplace.tv.playback
+package com.kisuro.fireplace.tv.playback
 
 import android.content.Context
 import android.util.Log

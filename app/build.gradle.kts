@@ -4,15 +4,24 @@ plugins {
 }
 
 android {
-    namespace = "com.fireplace.tv"
+    namespace = "com.kisuro.fireplace.tv"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.fireplace.tv"
+        applicationId = "com.kisuro.fireplace.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.0.10"
+        versionCode = 11
+        versionName = "1.0.11"
+    }
+
+    signingConfigs {
+        create("debugConfig") {
+            storeFile = file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -25,6 +34,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debugConfig")
         }
     }
 

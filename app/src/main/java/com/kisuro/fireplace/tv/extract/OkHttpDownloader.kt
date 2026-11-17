@@ -1,4 +1,4 @@
-package com.fireplace.tv.extract
+package com.kisuro.fireplace.tv.extract
 
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody

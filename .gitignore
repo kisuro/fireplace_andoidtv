@@ -24,3 +24,4 @@ out/
 local.properties
 *.keystore
 *.jks
+!app/keystore/debug.keystore

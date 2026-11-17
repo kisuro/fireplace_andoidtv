@@ -1,4 +1,4 @@
-package com.fireplace.tv.extract
+package com.kisuro.fireplace.tv.extract
 
 import android.util.Log
 import org.schabi.newpipe.extractor.ServiceList

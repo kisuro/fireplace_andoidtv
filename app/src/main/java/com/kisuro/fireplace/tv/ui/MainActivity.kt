@@ -1,4 +1,4 @@
-package com.fireplace.tv.ui
+package com.kisuro.fireplace.tv.ui
 
 import android.content.Intent
 import android.os.Bundle
@@ -13,9 +13,9 @@ import androidx.leanback.widget.HorizontalGridView
 import androidx.leanback.widget.ItemBridgeAdapter
 import androidx.leanback.widget.OnChildViewHolderSelectedListener
 import androidx.recyclerview.widget.RecyclerView
-import com.fireplace.tv.R
-import com.fireplace.tv.data.FireplaceVideo
-import com.fireplace.tv.data.VideoCatalog
+import com.kisuro.fireplace.tv.R
+import com.kisuro.fireplace.tv.data.FireplaceVideo
+import com.kisuro.fireplace.tv.data.VideoCatalog
 
 /**
  * D-pad fireplace picker.

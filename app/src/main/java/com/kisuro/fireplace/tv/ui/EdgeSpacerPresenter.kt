@@ -1,4 +1,4 @@
-package com.fireplace.tv.ui
+package com.kisuro.fireplace.tv.ui
 
 import android.util.TypedValue
 import android.view.View

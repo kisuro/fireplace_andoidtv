@@ -1,8 +1,8 @@
-package com.fireplace.tv.ui
+package com.kisuro.fireplace.tv.ui
 
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.PresenterSelector
-import com.fireplace.tv.data.FireplaceVideo
+import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 class CarouselPresenterSelector(
     private val videoPresenter: VideoCardPresenter = VideoCardPresenter(),

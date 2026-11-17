@@ -1,4 +1,4 @@
-package com.fireplace.tv.data
+package com.kisuro.fireplace.tv.data
 
 object VideoCatalog {
     val videos: List<FireplaceVideo> = listOf(

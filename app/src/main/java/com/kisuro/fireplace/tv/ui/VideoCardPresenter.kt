@@ -1,4 +1,4 @@
-package com.fireplace.tv.ui
+package com.kisuro.fireplace.tv.ui
 
 import android.util.Log
 import android.util.TypedValue
@@ -8,8 +8,8 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.leanback.widget.Presenter
 import coil.load
-import com.fireplace.tv.R
-import com.fireplace.tv.data.FireplaceVideo
+import com.kisuro.fireplace.tv.R
+import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 /**
  * Plain layout cards (not Leanback ImageCardView) so BaseGridView always gets

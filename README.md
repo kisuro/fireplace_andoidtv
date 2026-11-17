@@ -2,8 +2,9 @@
 
 Sideloadable **Android TV / Google TV (Leanback)** ambient fireplace player.
 
-- **Package:** `com.fireplace.tv`
-- **Current version:** `1.0.10` (versionCode 10)
+- **Package:** `com.kisuro.fireplace.tv`
+- **App label:** Fireplace
+- **Current version:** `1.0.11` (versionCode 11)
 - **Playback:** Media3 ExoPlayer (no YouTube chrome / ads)
 - **Extraction:** NewPipe Extractor (live + VOD)
 
@@ -29,16 +30,34 @@ APK output:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### Debug signing (consistent)
+
+Debug builds are signed with the project keystore so sideloads stay upgradeable:
+
+| Field | Value |
+| --- | --- |
+| Keystore | `app/keystore/debug.keystore` |
+| Store password | `android` |
+| Key alias | `androiddebugkey` |
+| Key password | `android` |
+
+Configured in `app/build.gradle.kts` (`signingConfigs.debugConfig` → `buildTypes.debug`). Do not replace this keystore if you want `adb install -r` upgrades to keep working.
+
 ## Sideload (Google TV)
 
-1. Enable Developer options / Unknown sources (or use ADB).
-2. Install the debug APK:
+If an older build with package `com.fireplace.tv` is installed, uninstall it first (different package / signing key will conflict):
+
+```bash
+adb uninstall com.fireplace.tv
+```
+
+Then install the debug APK:
 
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-3. Open **Fireplace** from the Apps row (Leanback launcher).
+Open **Fireplace** from the Apps row (Leanback launcher).
 
 More detail: see Project install note if present (`docs/fireplace-tv-install.md` in the Cursor Project store). A prebuilt APK may also be available there as `media/fireplace-tv.apk` — this repository is **source-only** (APKs are gitignored).
 

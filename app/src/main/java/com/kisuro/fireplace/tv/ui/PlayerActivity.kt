@@ -1,4 +1,4 @@
-package com.fireplace.tv.ui
+package com.kisuro.fireplace.tv.ui
 
 import android.os.Bundle
 import android.util.Log
@@ -26,16 +26,16 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.PlayerView
-import com.fireplace.tv.R
-import com.fireplace.tv.data.FireplaceVideo
-import com.fireplace.tv.data.VideoCatalog
-import com.fireplace.tv.extract.OkHttpDownloader
-import com.fireplace.tv.extract.PlaybackSource
-import com.fireplace.tv.extract.ResolvedStream
-import com.fireplace.tv.extract.YoutubeStreamResolver
-import com.fireplace.tv.playback.FireplacePlayerFactory
-import com.fireplace.tv.playback.FireplaceQualityPicker
-import com.fireplace.tv.playback.Vp9Policy
+import com.kisuro.fireplace.tv.R
+import com.kisuro.fireplace.tv.data.FireplaceVideo
+import com.kisuro.fireplace.tv.data.VideoCatalog
+import com.kisuro.fireplace.tv.extract.OkHttpDownloader
+import com.kisuro.fireplace.tv.extract.PlaybackSource
+import com.kisuro.fireplace.tv.extract.ResolvedStream
+import com.kisuro.fireplace.tv.extract.YoutubeStreamResolver
+import com.kisuro.fireplace.tv.playback.FireplacePlayerFactory
+import com.kisuro.fireplace.tv.playback.FireplaceQualityPicker
+import com.kisuro.fireplace.tv.playback.Vp9Policy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
