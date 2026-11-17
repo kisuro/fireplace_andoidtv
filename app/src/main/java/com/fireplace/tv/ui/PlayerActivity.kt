@@ -13,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -33,6 +34,7 @@ import com.fireplace.tv.extract.PlaybackSource
 import com.fireplace.tv.extract.ResolvedStream
 import com.fireplace.tv.extract.YoutubeStreamResolver
 import com.fireplace.tv.playback.FireplacePlayerFactory
+import com.fireplace.tv.playback.FireplaceQualityPicker
 import com.fireplace.tv.playback.Vp9Policy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -63,6 +65,9 @@ class PlayerActivity : AppCompatActivity() {
     private var consecutiveFailures: Int = 0
     private var playbackGeneration: Int = 0
     private var vp9Policy: Vp9Policy = Vp9Policy.DEMOTE_MTK_VP9
+    private val excludedFormatKeys = linkedSetOf<String>()
+    private var lastPickedKey: String? = null
+    private var qualityAppliedForTracks: Int = -1
 
     private val resolver = YoutubeStreamResolver()
 
@@ -118,6 +123,11 @@ class PlayerActivity : AppCompatActivity() {
         val current = video ?: return
         resolveJob?.cancel()
         recoveryJob?.cancel()
+        // Fresh resolve path may reset exclusions unless we're mid decode-fallback.
+        if (!reason.startsWith("decode_fail") && !reason.startsWith("player_error")) {
+            excludedFormatKeys.clear()
+            lastPickedKey = null
+        }
         showLoading(getString(R.string.loading_stream))
         val generation = ++playbackGeneration
 
@@ -218,6 +228,7 @@ class PlayerActivity : AppCompatActivity() {
         val (exo, selector) = FireplacePlayerFactory.create(this, vp9Policy, loadControl)
         player = exo
         trackSelector = selector
+        qualityAppliedForTracks = -1
         playerView.player = exo
         exo.addListener(playerListener)
         exo.setMediaSource(mediaSource)
@@ -242,9 +253,14 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private val playerListener = object : Player.Listener {
+        override fun onTracksChanged(tracks: Tracks) {
+            applyBestQualityOverride(tracks, reason = "tracks_changed")
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
+                player?.currentTracks?.let { applyBestQualityOverride(it, reason = "ready") }
                 logSelectedVideoFormat()
                 hideOverlay()
             }
@@ -252,39 +268,88 @@ class PlayerActivity : AppCompatActivity() {
 
         override fun onPlayerError(error: PlaybackException) {
             val formatHint = error.message.orEmpty() + " " + (error.cause?.message.orEmpty())
-            val isVp9Decode = error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED &&
-                ("vp9" in formatHint.lowercase() ||
+            val isDecodeFail = error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
+            val isVp9Decode = isDecodeFail && (
+                "vp9" in formatHint.lowercase() ||
                     "vp09" in formatHint.lowercase() ||
                     "on2.vp9" in formatHint.lowercase() ||
-                    "mtk.vp9" in formatHint.lowercase())
+                    "mtk.vp9" in formatHint.lowercase()
+                )
 
             Log.e(
                 TAG,
                 "player error code=${error.errorCodeName}(${error.errorCode}) " +
-                    "vp9Decode=$isVp9Decode policy=$vp9Policy " +
+                    "vp9Decode=$isVp9Decode policy=$vp9Policy lastPick=$lastPickedKey " +
                     "cause=${error.cause?.javaClass?.simpleName} msg=${error.message}",
                 error,
             )
 
-            // Prefer silent codec fallback before any error UI.
-            if (isVp9Decode || error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED) {
+            if (isDecodeFail) {
+                showLoading(getString(R.string.retrying_stream))
+                // Blacklist the failed representation; try next (e.g. 4K HEVC → 1440 → 1080).
+                lastPickedKey?.let { excludedFormatKeys += it }
+                player?.videoFormat?.let { fmt ->
+                    excludedFormatKeys +=
+                        "${fmt.sampleMimeType}|${fmt.height}|${fmt.width}|${fmt.bitrate}"
+                }
+                Log.w(TAG, "DECODING_FAILED → exclude=$excludedFormatKeys and pick next")
+
+                if (isVp9Decode && vp9Policy != Vp9Policy.BAN_VP9) {
+                    vp9Policy = Vp9Policy.BAN_VP9
+                }
+
+                val tracks = player?.currentTracks
+                val selector = trackSelector
+                if (tracks != null && selector != null) {
+                    val allowVp9 = vp9Policy != Vp9Policy.BAN_VP9
+                    val next = FireplaceQualityPicker.pickBest(tracks, allowVp9, excludedFormatKeys)
+                    if (next != null) {
+                        lastPickedKey = next.key
+                        FireplaceQualityPicker.applyOverride(selector, next)
+                        // Seek/reprepare current item so the new override takes effect.
+                        player?.prepare()
+                        player?.playWhenReady = true
+                        return
+                    }
+                }
+
+                // Ladder exhausted for this manifest — re-resolve with stricter VP9 policy.
                 if (vp9Policy != Vp9Policy.BAN_VP9) {
                     vp9Policy = Vp9Policy.BAN_VP9
-                    Log.w(TAG, "DECODING_FAILED → escalate to BAN_VP9 and rebind without error UI")
-                    showLoading(getString(R.string.retrying_stream))
-                    val resolved = lastResolved
-                    if (resolved != null) {
-                        bindPlayer(resolved, playbackGeneration)
-                    } else {
-                        startPlayback(reason = "decode_fail_ban_vp9")
-                    }
-                    return
                 }
+                val resolved = lastResolved
+                if (resolved != null) {
+                    qualityAppliedForTracks = -1
+                    bindPlayer(resolved, playbackGeneration)
+                } else {
+                    startPlayback(reason = "decode_fail_exhausted")
+                }
+                return
             }
 
             consecutiveFailures++
             startPlayback(reason = "player_error:${error.errorCodeName}")
         }
+    }
+
+    private fun applyBestQualityOverride(tracks: Tracks, reason: String) {
+        val selector = trackSelector ?: return
+        if (!tracks.containsType(androidx.media3.common.C.TRACK_TYPE_VIDEO)) return
+        // Avoid fighting ourselves every frame; re-apply when tracks identity changes.
+        val fingerprint = tracks.groups.sumOf { it.length } * 31 + tracks.groups.size
+        if (fingerprint == qualityAppliedForTracks && lastPickedKey != null) return
+
+        val allowVp9 = vp9Policy != Vp9Policy.BAN_VP9
+        val best = FireplaceQualityPicker.pickBest(tracks, allowVp9, excludedFormatKeys) ?: return
+        lastPickedKey = best.key
+        qualityAppliedForTracks = fingerprint
+        FireplaceQualityPicker.applyOverride(selector, best)
+        Log.i(
+            TAG,
+            "quality[$reason] selected ${best.format.width}x${best.format.height} " +
+                "mime=${best.format.sampleMimeType} codecs=${best.format.codecs} " +
+                "bitrate=${best.format.bitrate}",
+        )
     }
 
     private fun logSelectedVideoFormat() {
@@ -294,10 +359,17 @@ class PlayerActivity : AppCompatActivity() {
             TAG,
             "playing mime=${format?.sampleMimeType} codecs=${format?.codecs} " +
                 "size=${format?.width}x${format?.height} fps=${format?.frameRate} " +
-                "bitrate=${format?.bitrate} vp9Policy=$vp9Policy",
+                "bitrate=${format?.bitrate} vp9Policy=$vp9Policy excluded=${excludedFormatKeys.size}",
         )
+        if (format != null && format.height in 1 until 2160) {
+            Log.w(
+                TAG,
+                "below 4K now (${format.width}x${format.height}); " +
+                    "higher tracks missing or excluded=$excludedFormatKeys",
+            )
+        }
         if (format?.sampleMimeType == MimeTypes.VIDEO_VP9) {
-            Log.w(TAG, "VP9 still selected after policy=$vp9Policy — unexpected on MTK")
+            Log.w(TAG, "VP9 selected under policy=$vp9Policy (non-MTK decoder path)")
         }
     }
 
@@ -418,10 +490,13 @@ class PlayerActivity : AppCompatActivity() {
         player?.release()
         player = null
         trackSelector = null
+        qualityAppliedForTracks = -1
         if (!keepJobs) {
             resolveJob?.cancel()
             liveRefreshJob?.cancel()
             recoveryJob?.cancel()
+            // Keep excludedFormatKeys across soft rebinds within the activity so we
+            // don't immediately re-select a known-bad 4K track after DECODING_FAILED.
         }
     }
 

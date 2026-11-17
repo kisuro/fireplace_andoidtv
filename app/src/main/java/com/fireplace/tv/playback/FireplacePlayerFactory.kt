@@ -3,38 +3,34 @@ package com.fireplace.tv.playback
 import android.content.Context
 import android.util.Log
 import androidx.media3.common.C
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 
 @UnstableApi
 object FireplacePlayerFactory {
 
     private const val TAG = "FireplaceCodec"
-    private const val MAX_WIDTH = 3840
-    private const val MAX_HEIGHT = 2160
 
     fun create(
         context: Context,
         vp9Policy: Vp9Policy,
         loadControl: DefaultLoadControl,
     ): Pair<ExoPlayer, DefaultTrackSelector> {
+        // No AVC-first mime preference — that forced 1080p AVC over 4K HEVC.
+        // FireplaceQualityPicker applies an explicit resolution-first override.
         val trackSelector = DefaultTrackSelector(context).apply {
             parameters = buildUponParameters()
-                .setMaxVideoSize(MAX_WIDTH, MAX_HEIGHT)
-                // Start at best ladder step immediately (avoid low→4K ABR ramp).
+                .setMaxVideoSize(FireplaceQualityPicker.MAX_WIDTH, FireplaceQualityPicker.MAX_HEIGHT)
                 .setForceHighestSupportedBitrate(true)
-                // Prefer AVC, then HEVC; VP9 last (often filtered by codec selector).
-                .setPreferredVideoMimeTypes(
-                    MimeTypes.VIDEO_H264,
-                    MimeTypes.VIDEO_H265,
-                    MimeTypes.VIDEO_VP9,
-                )
                 .setExceedRendererCapabilitiesIfNecessary(false)
-                .setViewportSize(MAX_WIDTH, MAX_HEIGHT, /* orientationMayChange= */ true)
+                .setViewportSize(
+                    FireplaceQualityPicker.MAX_WIDTH,
+                    FireplaceQualityPicker.MAX_HEIGHT,
+                    /* orientationMayChange= */ true,
+                )
                 .setConstrainAudioChannelCountToDeviceCapabilities(false)
                 .build()
         }
@@ -46,7 +42,8 @@ object FireplacePlayerFactory {
 
         Log.i(
             TAG,
-            "build player vp9Policy=$vp9Policy prefer=AVC,HEVC forceHighestBitrate=true max=${MAX_WIDTH}x$MAX_HEIGHT",
+            "build player vp9Policy=$vp9Policy selection=height-first " +
+                "codecRank=HEVC>AVC>VP9 max=${FireplaceQualityPicker.MAX_WIDTH}x${FireplaceQualityPicker.MAX_HEIGHT}",
         )
 
         val player = ExoPlayer.Builder(context)
