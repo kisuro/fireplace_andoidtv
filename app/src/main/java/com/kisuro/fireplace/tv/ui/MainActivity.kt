@@ -58,6 +58,12 @@ class MainActivity : FragmentActivity() {
         applyHorizontalInset(findViewById(R.id.browse_title), safeInset)
         applyHorizontalInset(findViewById(R.id.browse_subtitle), safeInset)
 
+        // hero_container is the weighted FrameLayout (must stay non-zero height).
+        // Insets apply to the hero card; carousel uses a fixed row height so Leanback
+        // wrap measure cannot steal the leftover space (v1.0.20 collapsed hero to 0).
+        findViewById<View>(R.id.hero_container).minimumHeight =
+            resources.getDimensionPixelSize(R.dimen.hero_min_height)
+
         heroRoot = findViewById(R.id.hero_card)
         heroImage = heroRoot.findViewById(R.id.hero_image)
         heroTitle = heroRoot.findViewById(R.id.hero_title)

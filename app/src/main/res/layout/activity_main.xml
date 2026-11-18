@@ -7,8 +7,8 @@
     android:clipChildren="false"
     android:clipToPadding="false"
     android:orientation="vertical"
-    android:paddingTop="28dp"
-    android:paddingBottom="16dp">
+    android:paddingTop="24dp"
+    android:paddingBottom="12dp">
 
     <TextView
         android:id="@+id/browse_title"
@@ -32,36 +32,42 @@
         android:textColor="@color/fireplace_text_dim"
         android:textSize="16sp" />
 
-    <!-- Large centered hero for the current / last-played fireplace. -->
+    <!--
+      Hero fills remaining height ABOVE the fixed-height carousel.
+      HorizontalGridView must NOT be wrap_content here — Leanback wrap
+      measure can consume all leftover space and collapse this weight child
+      to 0 height (Mac ADB v1.0.20: FrameLayout h=0 at y=225).
+    -->
     <FrameLayout
+        android:id="@+id/hero_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:layout_weight="1"
-        android:clipChildren="false">
+        android:clipChildren="false"
+        android:minHeight="@dimen/hero_min_height">
 
         <include
             android:id="@+id/hero_card"
             layout="@layout/item_hero_card"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_gravity="center"
             android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
             android:layout_marginEnd="@dimen/tv_safe_inset_horizontal" />
     </FrameLayout>
 
-    <!-- Smaller-card strip; selection syncs the hero above. -->
+    <!-- Fixed row height so weight above gets a real non-zero leftover. -->
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/video_carousel"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_height="@dimen/carousel_row_height"
+        android:layout_marginTop="8dp"
         android:clipChildren="false"
         android:clipToPadding="false"
         android:focusable="true"
         android:focusableInTouchMode="true"
-        android:minHeight="220dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp" />
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp" />
 
 </LinearLayout>
