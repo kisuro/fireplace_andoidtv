@@ -57,18 +57,27 @@ class VideoCardPresenter : Presenter() {
             "Loop"
         }
 
-        image.load(video.maxThumbnailUrl) {
-            placeholder(R.drawable.card_placeholder)
-            error(R.drawable.card_placeholder)
-            crossfade(true)
-            listener(
-                onError = { _, _ ->
-                    image.load(video.thumbnailUrl) {
-                        placeholder(R.drawable.card_placeholder)
-                        error(R.drawable.card_placeholder)
-                    }
-                },
-            )
+        val localThumb = video.thumbnailResId
+        if (localThumb != null) {
+            image.load(localThumb) {
+                placeholder(R.drawable.card_placeholder)
+                error(R.drawable.card_placeholder)
+                crossfade(true)
+            }
+        } else {
+            image.load(video.maxThumbnailUrl) {
+                placeholder(R.drawable.card_placeholder)
+                error(R.drawable.card_placeholder)
+                crossfade(true)
+                listener(
+                    onError = { _, _ ->
+                        image.load(video.thumbnailUrl) {
+                            placeholder(R.drawable.card_placeholder)
+                            error(R.drawable.card_placeholder)
+                        }
+                    },
+                )
+            }
         }
     }
 
