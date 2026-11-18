@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Shared TV overscan safe inset for title + carousel.
-      Leanback's lb_browse_padding_start is only 56dp; Kirill's TCL still clips
-      header/first card at ~48–56dp (framebuffer x≈96–112 falls under the bezel).
-      96dp (~10% of a 960dp-wide 1080p UI) keeps focus stroke + labels inside
-      the visible panel without spacer items.
+      Horizontal safe inset for title + carousel row.
+      Kirill's TCL overscan still clips ANY focused card parked at the left
+      edge when inset is only ~96dp / 8% width — the orange stroke falls under
+      the bezel while scrolling. 160dp (~17% of a 960dp-wide 1080p UI) plus a
+      runtime floor of 14% of panel width keeps the full focus ring visible.
+      This inset must live on the HorizontalGridView padding so BOTH_EDGE
+      alignment parks cards inside it (root-only padding is not enough).
     -->
-    <dimen name="tv_safe_inset_horizontal">96dp</dimen>
-    <!-- Extra grid padding so BOTH_EDGE parks the focus stroke inside the safe area. -->
-    <dimen name="carousel_focus_inset">12dp</dimen>
+    <dimen name="tv_safe_inset_horizontal">160dp</dimen>
+    <!-- Extra grid padding beyond the safe inset for the 3dp focus stroke. -->
+    <dimen name="carousel_focus_inset">16dp</dimen>
     <dimen name="carousel_padding_vertical">36dp</dimen>
 </resources>

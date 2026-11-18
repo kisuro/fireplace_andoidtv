@@ -58,11 +58,17 @@ class VideoCardPresenter : Presenter() {
             "Loop"
         }
 
-        // Synchronous bind keyed by catalog id — each card shows its own frame.
+        // Clear first so recycled holders never flash a previous video's frame,
+        // then bind the catalog drawable by resource id (not by list index).
+        image.setImageDrawable(null)
         image.setImageResource(video.thumbnailResId)
         image.tag = video.id
         image.contentDescription = video.title
-        Log.i(TAG, "bindCard id=${video.id} title=${video.title} thumbRes=${video.thumbnailResId}")
+        Log.i(
+            TAG,
+            "bindCard id=${video.id} title=${video.title} " +
+                "youtubeId=${video.youtubeId} thumbRes=${video.thumbnailResId}",
+        )
     }
 
     override fun onUnbindViewHolder(viewHolder: ViewHolder) {
