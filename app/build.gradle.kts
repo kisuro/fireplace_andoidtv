@@ -11,8 +11,8 @@ android {
         applicationId = "com.kisuro.fireplace.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.0.11"
+        versionCode = 24
+        versionName = "1.0.24"
     }
 
     signingConfigs {
@@ -27,6 +27,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Same project keystore as debug so sideload upgrades stay consistent.
+            signingConfig = signingConfigs.getByName("debugConfig")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -86,5 +88,4 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    implementation("io.coil-kt:coil:2.7.0")
 }

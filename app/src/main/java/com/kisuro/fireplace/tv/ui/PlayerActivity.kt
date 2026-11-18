@@ -1,7 +1,9 @@
 package com.kisuro.fireplace.tv.ui
 
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ProgressBar
@@ -28,6 +30,7 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.PlayerView
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
+import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
 import com.kisuro.fireplace.tv.extract.OkHttpDownloader
 import com.kisuro.fireplace.tv.extract.PlaybackSource
@@ -68,6 +71,7 @@ class PlayerActivity : AppCompatActivity() {
     private val excludedFormatKeys = linkedSetOf<String>()
     private var lastPickedKey: String? = null
     private var qualityAppliedForTracks: Int = -1
+    private var lastCatalogSwitchUptimeMs: Long = 0L
 
     private val resolver = YoutubeStreamResolver()
 
@@ -103,8 +107,49 @@ class PlayerActivity : AppCompatActivity() {
             },
         )
 
+        video?.id?.let { LastPlayedStore.setVideoId(this, it) }
         Log.i(TAG, "open videoId=${video?.id} yt=${video?.youtubeId} catalogLive=${video?.isLive}")
         startPlayback(reason = "launch")
+    }
+
+    /**
+     * In fullscreen playback, LEFT/RIGHT swap to the previous/next catalog
+     * fireplace without leaving [PlayerActivity]. BACK still finishes to carousel.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    val delta = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+                    switchCatalogVideo(delta)
+                }
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun switchCatalogVideo(delta: Int) {
+        val current = video ?: return
+        val now = SystemClock.uptimeMillis()
+        if (now - lastCatalogSwitchUptimeMs < CATALOG_SWITCH_DEBOUNCE_MS) {
+            return
+        }
+        val next = VideoCatalog.neighbor(current.id, delta) ?: return
+        if (next.id == current.id) return
+        lastCatalogSwitchUptimeMs = now
+        Log.i(
+            TAG,
+            "catalog switch delta=$delta from=${current.id}(${current.title}) " +
+                "to=${next.id}(${next.title})",
+        )
+        video = next
+        LastPlayedStore.setVideoId(this, next.id)
+        // Fresh video → reset codec fallback state for the new source.
+        vp9Policy = Vp9Policy.DEMOTE_MTK_VP9
+        consecutiveFailures = 0
+        lastResolved = null
+        startPlayback(reason = if (delta > 0) "next" else "prev")
     }
 
     override fun onStop() {
@@ -510,5 +555,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val BACKOFF_BASE_MS = 700L
         private const val BACKOFF_MAX_MS = 12_000L
         private const val SOFT_RECOVERY_MAX_MS = 30_000L
+        /** Calm pace when holding LEFT/RIGHT on the remote. */
+        private const val CATALOG_SWITCH_DEBOUNCE_MS = 450L
     }
 }

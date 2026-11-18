@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Background used for ImageView outline clipping (clipToOutline). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/fireplace_card" />
+    <corners android:radius="@dimen/card_corner_radius" />
+</shape>

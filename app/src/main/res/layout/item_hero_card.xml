@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sized at runtime to a centered 16:9 preview box (not full-bleed).
+  Not focusable — focus stays on the carousel strip.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/hero_root"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/card_background"
+    android:clickable="false"
+    android:clipToOutline="true"
+    android:focusable="false"
+    android:focusableInTouchMode="false"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <FrameLayout
+        android:id="@+id/hero_media"
+        android:layout_width="@dimen/hero_preview_width"
+        android:layout_height="@dimen/hero_preview_height"
+        android:background="@drawable/card_image_rounded"
+        android:clipToOutline="true">
+
+        <ImageView
+            android:id="@+id/hero_image"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/hero_player"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="invisible" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/hero_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/fireplace_text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/hero_meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="12dp"
+            android:textColor="@color/fireplace_text_dim"
+            android:textSize="14sp" />
+    </LinearLayout>
+</LinearLayout>

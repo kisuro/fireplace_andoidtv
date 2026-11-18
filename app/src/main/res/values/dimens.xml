@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Leanback window keyline + title margin (not HorizontalGridView padding).
+      80dp (~8% of a 960dp-wide 1080p UI) — enough for focus stroke + TCL
+      overscan without wide empty side gutters (160dp/14% was too wide).
+      Runtime also floors at 7% of panel width.
+    -->
+    <dimen name="tv_safe_inset_horizontal">80dp</dimen>
+    <dimen name="carousel_focus_inset">16dp</dimen>
+    <dimen name="carousel_padding_vertical">36dp</dimen>
+    <dimen name="card_corner_radius">14dp</dimen>
+    <!-- Floor for the weighted hero host; actual 16:9 box is sized in code. -->
+    <dimen name="hero_min_height">200dp</dimen>
+    <!-- Default 16:9 preview box (overridden at runtime to fit the host). -->
+    <dimen name="hero_preview_width">480dp</dimen>
+    <dimen name="hero_preview_height">270dp</dimen>
+    <!-- Fixed carousel row (thumb-only; no title/meta under cards). -->
+    <dimen name="carousel_row_height">110dp</dimen>
+    <dimen name="carousel_card_width">140dp</dimen>
+    <dimen name="carousel_image_height">78dp</dimen>
+</resources>
