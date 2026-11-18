@@ -47,4 +47,12 @@ object VideoCatalog {
     )
 
     fun findById(id: String): FireplaceVideo? = videos.firstOrNull { it.id == id }
+
+    /** Previous/next in carousel order; wraps at both ends. */
+    fun neighbor(currentId: String, delta: Int): FireplaceVideo? {
+        if (videos.isEmpty()) return null
+        val index = videos.indexOfFirst { it.id == currentId }
+        if (index < 0) return null
+        return videos[(index + delta).mod(videos.size)]
+    }
 }
