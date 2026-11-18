@@ -15,8 +15,8 @@
     <!-- Default 16:9 preview box (overridden at runtime to fit the host). -->
     <dimen name="hero_preview_width">480dp</dimen>
     <dimen name="hero_preview_height">270dp</dimen>
-    <!-- Fixed carousel row so LinearLayout weight above cannot collapse to 0. -->
-    <dimen name="carousel_row_height">156dp</dimen>
+    <!-- Fixed carousel row (thumb-only; no title/meta under cards). -->
+    <dimen name="carousel_row_height">110dp</dimen>
     <dimen name="carousel_card_width">140dp</dimen>
     <dimen name="carousel_image_height">78dp</dimen>
 </resources>

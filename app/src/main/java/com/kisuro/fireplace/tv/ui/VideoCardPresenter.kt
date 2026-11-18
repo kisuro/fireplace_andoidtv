@@ -8,17 +8,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
-import android.widget.TextView
 import androidx.leanback.widget.Presenter
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 /**
- * Small carousel cards under the hero.
- *
- * Thumbnails bind synchronously via [ImageView.setImageResource] from
- * [FireplaceVideo.thumbnailResId]. Card chrome and image share
- * [R.dimen.card_corner_radius] via [View.clipToOutline].
+ * Thumb-only carousel cards under the hero (no title/meta under the strip).
+ * Labels for the selection stay on the hero card.
  */
 class VideoCardPresenter : Presenter() {
 
@@ -51,20 +47,12 @@ class VideoCardPresenter : Presenter() {
         }
         val root = viewHolder.view
         val image = root.findViewById<ImageView>(R.id.card_image)
-        val title = root.findViewById<TextView>(R.id.card_title)
-        val meta = root.findViewById<TextView>(R.id.card_meta)
-
-        title.text = video.title
-        meta.text = if (video.isLive) {
-            root.resources.getString(R.string.live_badge)
-        } else {
-            "Loop"
-        }
 
         image.setImageDrawable(null)
         image.setImageResource(video.thumbnailResId)
         image.tag = video.id
         image.contentDescription = video.title
+        root.contentDescription = video.title
         Log.i(
             TAG,
             "bindCard id=${video.id} title=${video.title} " +
@@ -77,6 +65,7 @@ class VideoCardPresenter : Presenter() {
         image.setImageDrawable(null)
         image.tag = null
         image.contentDescription = null
+        viewHolder.view.contentDescription = null
     }
 
     private fun applyRoundClip(view: View, radiusPx: Float) {
