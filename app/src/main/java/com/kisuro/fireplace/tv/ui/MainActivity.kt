@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.leanback.widget.ArrayObjectAdapter
+import androidx.leanback.widget.BaseGridView
 import androidx.leanback.widget.HorizontalGridView
 import androidx.leanback.widget.ItemBridgeAdapter
 import androidx.leanback.widget.OnChildViewHolderSelectedListener
@@ -22,15 +23,18 @@ import kotlin.math.max
 /**
  * D-pad fireplace picker.
  *
- * Edge framing (TCL overscan) — Kirill: ANY tile parked at the left clips,
- * not only index 0. Root cause was missing **grid** horizontal padding:
- * BOTH_EDGE aligns the focused child to the HorizontalGridView's own pad,
- * so a root-only inset left the row edge-flush under the bezel while the
- * title (also root-padded) looked further right.
+ * Left framing (TCL) — v1.0.17 still parked the focused card mostly off-screen.
  *
- * Fix: put [R.dimen.tv_safe_inset_horizontal] (+ small stroke inset) on the
- * grid padding; mirror the same start margin on the title/subtitle. Runtime
- * floor is max(xml, 14% panel width). No spacer items.
+ * Root cause: [WINDOW_ALIGN_BOTH_EDGE] + large horizontal padding computes
+ * `minScroll = minEdge - padding`. Leanback then scrolls so the first (and any
+ * left-parked) child's left edge sits at **-padding**, i.e. mostly off-screen.
+ * Bigger padding made the clip worse, not better.
+ *
+ * Fix: [WINDOW_ALIGN_NO_EDGE] with a **window keyline** at the safe inset and
+ * item alignment on the child's left edge (percent 0, no padding offset).
+ * Every selected card — first, middle, or scrolled to the left — parks its
+ * left edge on that keyline, matching the "Fireplace" title indent. No
+ * horizontal grid padding (it fought BOTH_EDGE); vertical pad only.
  */
 class MainActivity : FragmentActivity() {
 
@@ -42,18 +46,14 @@ class MainActivity : FragmentActivity() {
         setContentView(R.layout.activity_main)
 
         val safeInset = resolveSafeInsetPx()
-        val focusInset = resources.getDimensionPixelSize(R.dimen.carousel_focus_inset)
         val padVert = resources.getDimensionPixelSize(R.dimen.carousel_padding_vertical)
-        val rowInset = safeInset + focusInset
 
         findViewById<ViewGroup>(R.id.main_root).apply {
-            clipChildren = true
-            clipToPadding = true
-            // Horizontal inset lives on title margins + grid padding, not root.
+            clipChildren = false
+            clipToPadding = false
             setPadding(0, paddingTop, 0, paddingBottom)
         }
 
-        // Keep header flush with left-edge cards.
         findViewById<TextView>(R.id.browse_title).apply {
             val lp = layoutParams
             if (lp is ViewGroup.MarginLayoutParams) {
@@ -74,24 +74,26 @@ class MainActivity : FragmentActivity() {
         carousel = findViewById(R.id.video_carousel)
         carousel.setNumRows(1)
 
-        // BOTH_EDGE: start → align to left pad; end → align to right pad.
-        carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_BOTH_EDGE
-        carousel.windowAlignmentOffsetPercent = 0f
-        carousel.windowAlignmentOffset = 0
+        // Keyline at safe inset from the low (left) edge — not BOTH_EDGE+padding.
+        carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_NO_EDGE
+        carousel.windowAlignmentOffsetPercent =
+            BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+        carousel.windowAlignmentOffset = safeInset
         carousel.itemAlignmentOffsetPercent = 0f
         carousel.itemAlignmentOffset = 0
-        carousel.clipToPadding = true
-        carousel.clipChildren = true
-        // Row inset is on the grid so every left/right-parked card keeps its stroke.
-        carousel.setPadding(rowInset, padVert, rowInset, padVert)
+        carousel.setItemAlignmentOffsetWithPadding(false)
+        carousel.clipToPadding = false
+        carousel.clipChildren = false
+        // Horizontal padding must stay 0 — BOTH_EDGE/padding was the off-screen bug.
+        carousel.setPadding(0, padVert, 0, padVert)
         carousel.isFocusable = true
         carousel.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         carousel.horizontalSpacing = dp(24f)
 
         Log.i(
             TAG,
-            "align=BOTH_EDGE safeInsetPx=$safeInset focusInsetPx=$focusInset " +
-                "rowInsetPx=$rowInset density=${resources.displayMetrics.density} " +
+            "align=NO_EDGE keylinePx=$safeInset (windowOffset) " +
+                "density=${resources.displayMetrics.density} " +
                 "widthPx=${resources.displayMetrics.widthPixels}",
         )
 
@@ -123,7 +125,6 @@ class MainActivity : FragmentActivity() {
                             v.pivotX = v.width / 2f
                             v.pivotY = v.height / 2f
                         }
-                        // Vertical-only scale — never grow past the horizontal inset.
                         val scaleY = if (hasFocus) FOCUS_SCALE_Y else 1f
                         v.animate().scaleX(1f).scaleY(scaleY).setDuration(120).start()
                         if (hasFocus) {
@@ -160,7 +161,6 @@ class MainActivity : FragmentActivity() {
 
         carousel.visibility = View.VISIBLE
 
-        // Cold start: wait for layout, then select 0 via Leanback alignment only.
         carousel.post { settleOnIndex(0, smooth = false) }
         carousel.postDelayed({ settleOnIndex(0, smooth = false) }, 200)
     }
@@ -197,7 +197,6 @@ class MainActivity : FragmentActivity() {
         if (smooth) {
             carousel.setSelectedPositionSmooth(target)
         } else {
-            // Leanback GridLayoutManager.setSelection honors window padding/BOTH_EDGE.
             carousel.setSelectedPosition(target)
         }
         carousel.requestFocus()
@@ -208,8 +207,8 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * At least the XML safe inset; also never below ~14% of the panel width so
-     * TCL-class overscan keeps a visible margin for the focus stroke.
+     * Safe inset used as the Leanback window keyline (and title margin).
+     * Floor at 14% of panel width for TCL-class overscan.
      */
     private fun resolveSafeInsetPx(): Int {
         val fromXml = resources.getDimensionPixelSize(R.dimen.tv_safe_inset_horizontal)
@@ -241,6 +240,7 @@ class MainActivity : FragmentActivity() {
             TAG,
             "carousel w=${carousel.width} padL=${carousel.paddingLeft} padR=${carousel.paddingRight} " +
                 "rootPadL=${root.paddingLeft} rootPadR=${root.paddingRight} " +
+                "keylineOffset=${carousel.windowAlignmentOffset} " +
                 "adapterCount=${objectAdapter.size()} selected=${carousel.selectedPosition} " +
                 "firstX1=${first?.let { firstLoc[0] }} lastX2=${last?.let { lastLoc[0] + it.width }}",
         )
@@ -265,7 +265,6 @@ class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "FireplaceMain"
         private const val FOCUS_SCALE_Y = 1.02f
-        /** Floor relative to panel width — 96dp/8% was still clipped on TCL. */
         private const val SAFE_INSET_WIDTH_FRACTION = 0.14f
     }
 }

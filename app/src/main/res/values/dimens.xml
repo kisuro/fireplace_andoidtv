@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Horizontal safe inset for title + carousel row.
-      Kirill's TCL overscan still clips ANY focused card parked at the left
-      edge when inset is only ~96dp / 8% width — the orange stroke falls under
-      the bezel while scrolling. 160dp (~17% of a 960dp-wide 1080p UI) plus a
-      runtime floor of 14% of panel width keeps the full focus ring visible.
-      This inset must live on the HorizontalGridView padding so BOTH_EDGE
-      alignment parks cards inside it (root-only padding is not enough).
+      Leanback window keyline + title margin (not HorizontalGridView padding).
+      BOTH_EDGE with large padding computed minScroll = minEdge - padding and
+      parked focused cards mostly off-screen to the left on TCL. Keyline at
+      160dp (~17% of 960dp-wide 1080p UI); runtime also floors at 14% width.
     -->
     <dimen name="tv_safe_inset_horizontal">160dp</dimen>
-    <!-- Extra grid padding beyond the safe inset for the 3dp focus stroke. -->
+    <!-- Kept for reference; horizontal focus inset is unused with NO_EDGE keyline. -->
     <dimen name="carousel_focus_inset">16dp</dimen>
     <dimen name="carousel_padding_vertical">36dp</dimen>
 </resources>

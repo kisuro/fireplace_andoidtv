@@ -4,16 +4,16 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_browse"
-    android:clipChildren="true"
-    android:clipToPadding="true"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:orientation="vertical"
     android:paddingTop="36dp"
     android:paddingBottom="24dp">
 
     <!--
-      Title uses the same start inset as the carousel padding so the header
-      aligns with left-edge cards. Do not rely on root horizontal padding —
-      BOTH_EDGE only honors the grid's own padding when parking focused items.
+      Title start margin matches the Leanback window keyline (safe inset).
+      Do not put that inset on HorizontalGridView horizontal padding —
+      BOTH_EDGE + padding scrolled cards off-screen to the left.
     -->
     <TextView
         android:id="@+id/browse_title"
@@ -37,22 +37,16 @@
         android:textColor="@color/fireplace_text_dim"
         android:textSize="18sp" />
 
-    <!--
-      Safe inset is the grid's horizontal padding so every left/right-parked
-      focused card (not only index 0) keeps its orange stroke on-screen.
-    -->
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/video_carousel"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="28dp"
         android:layout_weight="1"
-        android:clipChildren="true"
-        android:clipToPadding="true"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:focusable="true"
         android:focusableInTouchMode="true"
-        android:paddingStart="@dimen/tv_safe_inset_horizontal"
-        android:paddingEnd="@dimen/tv_safe_inset_horizontal"
         android:paddingTop="@dimen/carousel_padding_vertical"
         android:paddingBottom="@dimen/carousel_padding_vertical" />
 
