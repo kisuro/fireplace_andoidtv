@@ -53,8 +53,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center"
-            android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
-            android:layout_marginEnd="@dimen/tv_safe_inset_horizontal" />
+            android:layout_marginStart="@dimen/hero_side_margin"
+            android:layout_marginEnd="@dimen/hero_side_margin" />
     </FrameLayout>
 
     <!-- Fixed row height so weight above gets a real non-zero leftover. -->

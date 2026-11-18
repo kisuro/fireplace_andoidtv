@@ -13,10 +13,11 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.leanback.widget.ArrayObjectAdapter
-import androidx.leanback.widget.BaseGridView
 import androidx.leanback.widget.HorizontalGridView
 import androidx.leanback.widget.ItemBridgeAdapter
 import androidx.leanback.widget.OnChildViewHolderSelectedListener
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.RecyclerView
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
@@ -25,20 +26,22 @@ import com.kisuro.fireplace.tv.data.VideoCatalog
 import kotlin.math.max
 
 /**
- * Browse: large centered hero for the current fireplace + smaller carousel
- * underneath. Carousel selection updates the hero; OK on hero or a strip card
- * starts playback. Last-played id is restored from [LastPlayedStore].
- *
- * Keeps v1.0.19 polish: 80dp/≥7% keyline margins, 14dp rounded cards.
+ * Browse: narrower centered hero with muted live preview + smaller carousel.
+ * Selection updates hero still + preview; OK opens fullscreen player.
+ * Last-played id restored from [LastPlayedStore].
  */
+@UnstableApi
 class MainActivity : FragmentActivity() {
 
     private lateinit var carousel: HorizontalGridView
     private lateinit var objectAdapter: ArrayObjectAdapter
     private lateinit var heroRoot: View
+    private lateinit var heroMedia: View
     private lateinit var heroImage: ImageView
+    private lateinit var heroPlayerView: PlayerView
     private lateinit var heroTitle: TextView
     private lateinit var heroMeta: TextView
+    private lateinit var heroPreview: HeroPreviewController
 
     private var currentVideo: FireplaceVideo? = null
     private var suppressHeroSync: Boolean = false
@@ -48,6 +51,7 @@ class MainActivity : FragmentActivity() {
         setContentView(R.layout.activity_main)
 
         val safeInset = resolveSafeInsetPx()
+        val heroInset = resolveHeroInsetPx()
 
         findViewById<ViewGroup>(R.id.main_root).apply {
             clipChildren = false
@@ -58,21 +62,28 @@ class MainActivity : FragmentActivity() {
         applyHorizontalInset(findViewById(R.id.browse_title), safeInset)
         applyHorizontalInset(findViewById(R.id.browse_subtitle), safeInset)
 
-        // hero_container is the weighted FrameLayout (must stay non-zero height).
-        // Insets apply to the hero card; carousel uses a fixed row height so Leanback
-        // wrap measure cannot steal the leftover space (v1.0.20 collapsed hero to 0).
         findViewById<View>(R.id.hero_container).minimumHeight =
             resources.getDimensionPixelSize(R.dimen.hero_min_height)
 
         heroRoot = findViewById(R.id.hero_card)
+        heroMedia = heroRoot.findViewById(R.id.hero_media)
         heroImage = heroRoot.findViewById(R.id.hero_image)
+        heroPlayerView = heroRoot.findViewById(R.id.hero_player)
         heroTitle = heroRoot.findViewById(R.id.hero_title)
         heroMeta = heroRoot.findViewById(R.id.hero_meta)
-        applyHorizontalInset(heroRoot, safeInset)
+        // Narrower than title keyline — larger side margins for the hero only.
+        applyHorizontalInset(heroRoot, heroInset)
 
         val radiusPx = resources.getDimension(R.dimen.card_corner_radius)
         applyRoundClip(heroRoot, radiusPx)
-        applyRoundClip(heroImage, radiusPx)
+        applyRoundClip(heroMedia, radiusPx)
+
+        heroPreview = HeroPreviewController(
+            context = this,
+            lifecycleOwner = this,
+            playerView = heroPlayerView,
+            poster = heroImage,
+        )
 
         heroRoot.setOnClickListener {
             currentVideo?.let { openPlayer(it) }
@@ -88,7 +99,6 @@ class MainActivity : FragmentActivity() {
 
         carousel = findViewById(R.id.video_carousel)
         carousel.setNumRows(1)
-        // Center the selected small card under the hero.
         carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_NO_EDGE
         carousel.windowAlignmentOffsetPercent = 50f
         carousel.windowAlignmentOffset = 0
@@ -97,10 +107,10 @@ class MainActivity : FragmentActivity() {
         carousel.setItemAlignmentOffsetWithPadding(false)
         carousel.clipToPadding = false
         carousel.clipChildren = false
-        carousel.setPadding(0, dp(8f), 0, dp(8f))
+        carousel.setPadding(0, dp(6f), 0, dp(6f))
         carousel.isFocusable = true
         carousel.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-        carousel.horizontalSpacing = dp(12f)
+        carousel.horizontalSpacing = dp(10f)
 
         objectAdapter = ArrayObjectAdapter(VideoCardPresenter()).apply {
             VideoCatalog.videos.forEach { add(it) }
@@ -197,15 +207,32 @@ class MainActivity : FragmentActivity() {
         val restored = LastPlayedStore.resolveVideo(this)
         val index = VideoCatalog.videos.indexOfFirst { it.id == restored.id }.coerceAtLeast(0)
         bindHero(restored)
+        if (::heroPreview.isInitialized) {
+            heroPreview.resume(restored)
+        }
         carousel.post {
             settleOnIndex(index, smooth = false, focusHero = true)
         }
     }
 
+    override fun onPause() {
+        if (::heroPreview.isInitialized) {
+            heroPreview.pause()
+        }
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (::heroPreview.isInitialized) {
+            heroPreview.release()
+        }
+        super.onDestroy()
+    }
+
     private fun bindHero(video: FireplaceVideo) {
         currentVideo = video
-        heroImage.setImageDrawable(null)
         heroImage.setImageResource(video.thumbnailResId)
+        heroImage.visibility = View.VISIBLE
         heroTitle.text = video.title
         heroMeta.text = if (video.isLive) {
             getString(R.string.live_badge)
@@ -214,6 +241,9 @@ class MainActivity : FragmentActivity() {
         }
         heroRoot.contentDescription = video.title
         Log.i(TAG, "hero id=${video.id} title=${video.title}")
+        if (::heroPreview.isInitialized) {
+            heroPreview.preview(video)
+        }
     }
 
     private fun moveSelection(delta: Int): Boolean {
@@ -251,6 +281,10 @@ class MainActivity : FragmentActivity() {
 
     private fun openPlayer(video: FireplaceVideo) {
         LastPlayedStore.setVideoId(this, video.id)
+        // Free the preview decoder before fullscreen player starts.
+        if (::heroPreview.isInitialized) {
+            heroPreview.release()
+        }
         Log.i(TAG, "play id=${video.id} title=${video.title}")
         startActivity(
             Intent(this, PlayerActivity::class.java).apply {
@@ -262,6 +296,13 @@ class MainActivity : FragmentActivity() {
     private fun resolveSafeInsetPx(): Int {
         val fromXml = resources.getDimensionPixelSize(R.dimen.tv_safe_inset_horizontal)
         val fromPercent = (resources.displayMetrics.widthPixels * SAFE_INSET_WIDTH_FRACTION).toInt()
+        return max(fromXml, fromPercent)
+    }
+
+    /** Wider side inset → narrower centered hero (~62% width floor). */
+    private fun resolveHeroInsetPx(): Int {
+        val fromXml = resources.getDimensionPixelSize(R.dimen.hero_side_margin)
+        val fromPercent = (resources.displayMetrics.widthPixels * HERO_SIDE_FRACTION).toInt()
         return max(fromXml, fromPercent)
     }
 
@@ -296,5 +337,6 @@ class MainActivity : FragmentActivity() {
         private const val HERO_FOCUS_SCALE = 1.015f
         private const val CAROUSEL_FOCUS_SCALE_Y = 1.03f
         private const val SAFE_INSET_WIDTH_FRACTION = 0.07f
+        private const val HERO_SIDE_FRACTION = 0.19f
     }
 }

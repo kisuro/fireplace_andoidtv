@@ -15,8 +15,10 @@
     <!-- Hero fills leftover height; these floors keep it visible on short panels. -->
     <dimen name="hero_min_height">220dp</dimen>
     <dimen name="hero_image_min_height">180dp</dimen>
+    <!-- Narrower hero than full keyline width (also floored at 18% side inset in code). -->
+    <dimen name="hero_side_margin">160dp</dimen>
     <!-- Fixed carousel row so LinearLayout weight above cannot collapse to 0. -->
-    <dimen name="carousel_row_height">200dp</dimen>
-    <dimen name="carousel_card_width">200dp</dimen>
-    <dimen name="carousel_image_height">112dp</dimen>
+    <dimen name="carousel_row_height">156dp</dimen>
+    <dimen name="carousel_card_width">140dp</dimen>
+    <dimen name="carousel_image_height">78dp</dimen>
 </resources>
