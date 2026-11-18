@@ -7,14 +7,9 @@
     android:clipChildren="false"
     android:clipToPadding="false"
     android:orientation="vertical"
-    android:paddingTop="36dp"
-    android:paddingBottom="24dp">
+    android:paddingTop="28dp"
+    android:paddingBottom="16dp">
 
-    <!--
-      Title start margin matches the Leanback window keyline (safe inset).
-      Do not put that inset on HorizontalGridView horizontal padding —
-      BOTH_EDGE + padding scrolled cards off-screen to the left.
-    -->
     <TextView
         android:id="@+id/browse_title"
         android:layout_width="wrap_content"
@@ -23,7 +18,7 @@
         android:layout_marginEnd="@dimen/tv_safe_inset_horizontal"
         android:text="@string/browse_title"
         android:textColor="@color/fireplace_text"
-        android:textSize="36sp"
+        android:textSize="32sp"
         android:textStyle="bold" />
 
     <TextView
@@ -31,23 +26,42 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="4dp"
         android:layout_marginEnd="@dimen/tv_safe_inset_horizontal"
         android:text="@string/browse_subtitle"
         android:textColor="@color/fireplace_text_dim"
-        android:textSize="18sp" />
+        android:textSize="16sp" />
 
+    <!-- Large centered hero for the current / last-played fireplace. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="16dp"
+        android:layout_weight="1"
+        android:clipChildren="false">
+
+        <include
+            android:id="@+id/hero_card"
+            layout="@layout/item_hero_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
+            android:layout_marginEnd="@dimen/tv_safe_inset_horizontal" />
+    </FrameLayout>
+
+    <!-- Smaller-card strip; selection syncs the hero above. -->
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/video_carousel"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="28dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
         android:clipChildren="false"
         android:clipToPadding="false"
         android:focusable="true"
         android:focusableInTouchMode="true"
-        android:paddingTop="@dimen/carousel_padding_vertical"
-        android:paddingBottom="@dimen/carousel_padding_vertical" />
+        android:minHeight="220dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp" />
 
 </LinearLayout>

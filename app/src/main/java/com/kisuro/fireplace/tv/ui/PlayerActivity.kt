@@ -30,6 +30,7 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.PlayerView
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
+import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
 import com.kisuro.fireplace.tv.extract.OkHttpDownloader
 import com.kisuro.fireplace.tv.extract.PlaybackSource
@@ -106,6 +107,7 @@ class PlayerActivity : AppCompatActivity() {
             },
         )
 
+        video?.id?.let { LastPlayedStore.setVideoId(this, it) }
         Log.i(TAG, "open videoId=${video?.id} yt=${video?.youtubeId} catalogLive=${video?.isLive}")
         startPlayback(reason = "launch")
     }
@@ -142,6 +144,7 @@ class PlayerActivity : AppCompatActivity() {
                 "to=${next.id}(${next.title})",
         )
         video = next
+        LastPlayedStore.setVideoId(this, next.id)
         // Fresh video → reset codec fallback state for the new source.
         vp9Policy = Vp9Policy.DEMOTE_MTK_VP9
         consecutiveFailures = 0

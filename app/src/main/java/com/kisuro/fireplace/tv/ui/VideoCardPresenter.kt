@@ -14,15 +14,11 @@ import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 /**
- * Plain layout cards (not Leanback ImageCardView) so BaseGridView always gets
- * non-zero measured size even without Theme.Leanback card attributes.
+ * Small carousel cards under the hero.
  *
- * Thumbnails are bound synchronously via [ImageView.setImageResource] from the
- * catalog's required [FireplaceVideo.thumbnailResId] — never remote YouTube
- * previews, never Coil (async recycle races could show the wrong frame).
- *
- * Card chrome and thumbnail share [R.dimen.card_corner_radius]; the image is
- * clipped with [View.clipToOutline] so corners match the focus stroke.
+ * Thumbnails bind synchronously via [ImageView.setImageResource] from
+ * [FireplaceVideo.thumbnailResId]. Card chrome and image share
+ * [R.dimen.card_corner_radius] via [View.clipToOutline].
  */
 class VideoCardPresenter : Presenter() {
 
@@ -30,15 +26,11 @@ class VideoCardPresenter : Presenter() {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_fireplace_card, parent, false)
 
-        val widthPx = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            CARD_WIDTH_DP,
-            parent.resources.displayMetrics,
-        ).toInt()
+        val widthPx = parent.resources.getDimensionPixelSize(R.dimen.carousel_card_width)
         view.layoutParams = ViewGroup.MarginLayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             marginEnd = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,
-                16f,
+                12f,
                 parent.resources.displayMetrics,
             ).toInt()
         }
@@ -69,8 +61,6 @@ class VideoCardPresenter : Presenter() {
             "Loop"
         }
 
-        // Clear first so recycled holders never flash a previous video's frame,
-        // then bind the catalog drawable by resource id (not by list index).
         image.setImageDrawable(null)
         image.setImageResource(video.thumbnailResId)
         image.tag = video.id
@@ -108,6 +98,5 @@ class VideoCardPresenter : Presenter() {
 
     companion object {
         private const val TAG = "FireplaceMain"
-        private const val CARD_WIDTH_DP = 320f
     }
 }
