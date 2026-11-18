@@ -11,8 +11,8 @@ android {
         applicationId = "com.kisuro.fireplace.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.0.11"
+        versionCode = 14
+        versionName = "1.0.14"
     }
 
     signingConfigs {
@@ -27,6 +27,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Same project keystore as debug so sideload upgrades stay consistent.
+            signingConfig = signingConfigs.getByName("debugConfig")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
