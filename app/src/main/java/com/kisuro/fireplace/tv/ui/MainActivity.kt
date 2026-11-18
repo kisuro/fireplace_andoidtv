@@ -16,16 +16,19 @@ import androidx.recyclerview.widget.RecyclerView
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 import com.kisuro.fireplace.tv.data.VideoCatalog
+import kotlin.math.max
 
 /**
  * D-pad fireplace picker.
  *
- * Edge framing (TCL):
- * - [WINDOW_ALIGN_BOTH_EDGE] keeps the first card inset on cold start and the
- *   last card against the right edge (no giant empty void from LOW_EDGE).
- * - Symmetric padding is the margin; no ItemDecoration / spacers (those caused
- *   clip + focus bugs).
- * - Explicit DPAD selection across all 7 videos; border focus only (no X scale).
+ * Edge framing (TCL overscan):
+ * - Shared [R.dimen.tv_safe_inset_horizontal] on [R.id.main_root] insets title
+ *   and carousel together. Grid-only padding left the header flush and still
+ *   lost the first focus stroke under the bezel when overscan ate ~48–56dp.
+ * - [WINDOW_ALIGN_BOTH_EDGE] + small focus inset keeps first/last cards framed
+ *   inside that safe area (no end void, no spacer items).
+ * - Cold start selects index 0 via Leanback selection only — do not call
+ *   RecyclerView.scrollToPosition (it is remapped, but double-settle fought layout).
  */
 class MainActivity : FragmentActivity() {
 
@@ -36,17 +39,20 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val safeInset = resolveSafeInsetPx()
+        val focusInset = resources.getDimensionPixelSize(R.dimen.carousel_focus_inset)
+        val padVert = resources.getDimensionPixelSize(R.dimen.carousel_padding_vertical)
+
         findViewById<ViewGroup>(R.id.main_root).apply {
             clipChildren = true
             clipToPadding = true
+            setPadding(safeInset, paddingTop, safeInset, paddingBottom)
         }
 
-        val edgePad = dp(EDGE_PAD_DP)
         carousel = findViewById(R.id.video_carousel)
         carousel.setNumRows(1)
 
-        // BOTH_EDGE: start → align low (left pad); end → align high (right pad).
-        // LOW_EDGE alone scrolled the last item to the left and left a blank void.
+        // BOTH_EDGE: start → align to left pad; end → align to right pad.
         carousel.windowAlignment = HorizontalGridView.WINDOW_ALIGN_BOTH_EDGE
         carousel.windowAlignmentOffsetPercent = 0f
         carousel.windowAlignmentOffset = 0
@@ -54,15 +60,15 @@ class MainActivity : FragmentActivity() {
         carousel.itemAlignmentOffset = 0
         carousel.clipToPadding = true
         carousel.clipChildren = true
-        carousel.setPadding(edgePad, dp(36f), edgePad, dp(36f))
+        carousel.setPadding(focusInset, padVert, focusInset, padVert)
         carousel.isFocusable = true
         carousel.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         carousel.horizontalSpacing = dp(24f)
 
         Log.i(
             TAG,
-            "align=BOTH_EDGE edgePadDp=$EDGE_PAD_DP edgePadPx=$edgePad " +
-                "density=${resources.displayMetrics.density} focusScaleX=1.0",
+            "align=BOTH_EDGE safeInsetPx=$safeInset focusInsetPx=$focusInset " +
+                "density=${resources.displayMetrics.density} widthPx=${resources.displayMetrics.widthPixels}",
         )
 
         objectAdapter = ArrayObjectAdapter(VideoCardPresenter()).apply {
@@ -129,7 +135,7 @@ class MainActivity : FragmentActivity() {
 
         carousel.visibility = View.VISIBLE
 
-        // Cold start: wait for layout, then select 0 without overscrolling.
+        // Cold start: wait for layout, then select 0 via Leanback alignment only.
         carousel.post { settleOnIndex(0, smooth = false) }
         carousel.postDelayed({ settleOnIndex(0, smooth = false) }, 200)
     }
@@ -166,15 +172,24 @@ class MainActivity : FragmentActivity() {
         if (smooth) {
             carousel.setSelectedPositionSmooth(target)
         } else {
-            // Instant settle for cold start — avoids partial first-card clip.
-            carousel.selectedPosition = target
-            carousel.scrollToPosition(target)
+            // Leanback GridLayoutManager.setSelection honors window padding/BOTH_EDGE.
+            carousel.setSelectedPosition(target)
         }
         carousel.requestFocus()
         carousel.post {
             carousel.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
             logCarouselMetrics()
         }
+    }
+
+    /**
+     * At least the XML safe inset; also never below ~8% of the panel width so
+     * dense 1080p / odd density TVs keep the same visible margin.
+     */
+    private fun resolveSafeInsetPx(): Int {
+        val fromXml = resources.getDimensionPixelSize(R.dimen.tv_safe_inset_horizontal)
+        val fromPercent = (resources.displayMetrics.widthPixels * SAFE_INSET_WIDTH_FRACTION).toInt()
+        return max(fromXml, fromPercent)
     }
 
     private fun logFocusedScreenBounds(view: View, position: Int) {
@@ -196,9 +211,11 @@ class MainActivity : FragmentActivity() {
         val lastLoc = IntArray(2)
         first?.getLocationOnScreen(firstLoc)
         last?.getLocationOnScreen(lastLoc)
+        val root = findViewById<View>(R.id.main_root)
         Log.i(
             TAG,
             "carousel w=${carousel.width} padL=${carousel.paddingLeft} padR=${carousel.paddingRight} " +
+                "rootPadL=${root.paddingLeft} rootPadR=${root.paddingRight} " +
                 "adapterCount=${objectAdapter.size()} selected=${carousel.selectedPosition} " +
                 "firstX1=${first?.let { firstLoc[0] }} lastX2=${last?.let { lastLoc[0] + it.width }}",
         )
@@ -223,7 +240,7 @@ class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "FireplaceMain"
         private const val FOCUS_SCALE_Y = 1.02f
-        /** Symmetric window padding — focus border + clear margin (~96px @ density 2). */
-        private const val EDGE_PAD_DP = 48f
+        /** Floor relative to panel width when XML dp under-shoots odd densities. */
+        private const val SAFE_INSET_WIDTH_FRACTION = 0.08f
     }
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.kisuro.fireplace.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 13
-        versionName = "1.0.13"
+        versionCode = 15
+        versionName = "1.0.15"
     }
 
     signingConfigs {
@@ -88,5 +88,4 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    implementation("io.coil-kt:coil:2.7.0")
 }

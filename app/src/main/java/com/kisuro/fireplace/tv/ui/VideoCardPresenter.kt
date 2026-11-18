@@ -7,7 +7,6 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.leanback.widget.Presenter
-import coil.load
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 
@@ -15,7 +14,9 @@ import com.kisuro.fireplace.tv.data.FireplaceVideo
  * Plain layout cards (not Leanback ImageCardView) so BaseGridView always gets
  * non-zero measured size even without Theme.Leanback card attributes.
  *
- * Adapter items are [CarouselItem.Video] wrappers (with edge spacers in the same list).
+ * Thumbnails are bound synchronously via [ImageView.setImageResource] from the
+ * catalog's required [FireplaceVideo.thumbnailResId] — never remote YouTube
+ * previews, never Coil (async recycle races could show the wrong frame).
  */
 class VideoCardPresenter : Presenter() {
 
@@ -57,16 +58,18 @@ class VideoCardPresenter : Presenter() {
             "Loop"
         }
 
-        // Always load the bundled clean frame — never remote YouTube thumbs.
-        image.load(video.thumbnailResId) {
-            placeholder(R.drawable.card_placeholder)
-            error(R.drawable.card_placeholder)
-            crossfade(true)
-        }
+        // Synchronous bind keyed by catalog id — each card shows its own frame.
+        image.setImageResource(video.thumbnailResId)
+        image.tag = video.id
+        image.contentDescription = video.title
+        Log.i(TAG, "bindCard id=${video.id} title=${video.title} thumbRes=${video.thumbnailResId}")
     }
 
     override fun onUnbindViewHolder(viewHolder: ViewHolder) {
-        viewHolder.view.findViewById<ImageView>(R.id.card_image)?.setImageDrawable(null)
+        val image = viewHolder.view.findViewById<ImageView>(R.id.card_image) ?: return
+        image.setImageDrawable(null)
+        image.tag = null
+        image.contentDescription = null
     }
 
     private fun unwrapVideo(item: Any): FireplaceVideo? {

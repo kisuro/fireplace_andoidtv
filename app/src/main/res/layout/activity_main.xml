@@ -7,16 +7,16 @@
     android:clipChildren="true"
     android:clipToPadding="true"
     android:orientation="vertical"
-    android:paddingStart="0dp"
+    android:paddingStart="@dimen/tv_safe_inset_horizontal"
     android:paddingTop="36dp"
-    android:paddingEnd="0dp"
+    android:paddingEnd="@dimen/tv_safe_inset_horizontal"
     android:paddingBottom="24dp">
 
+    <!-- Margins come from main_root safe inset — do not add a second start margin. -->
     <TextView
         android:id="@+id/browse_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="48dp"
         android:text="@string/browse_title"
         android:textColor="@color/fireplace_text"
         android:textSize="36sp"
@@ -26,13 +26,15 @@
         android:id="@+id/browse_subtitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="48dp"
         android:layout_marginTop="6dp"
         android:text="@string/browse_subtitle"
         android:textColor="@color/fireplace_text_dim"
         android:textSize="18sp" />
 
-    <!-- BOTH_EDGE + 48dp padding: first/last cards stay framed, no end void. -->
+    <!--
+      Root provides the TV safe inset. Grid keeps a small BOTH_EDGE focus inset
+      so the orange stroke is not flush against the safe edge.
+    -->
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/video_carousel"
         android:layout_width="match_parent"
@@ -43,9 +45,9 @@
         android:clipToPadding="true"
         android:focusable="true"
         android:focusableInTouchMode="true"
-        android:paddingStart="48dp"
-        android:paddingEnd="48dp"
-        android:paddingTop="36dp"
-        android:paddingBottom="36dp" />
+        android:paddingStart="@dimen/carousel_focus_inset"
+        android:paddingEnd="@dimen/carousel_focus_inset"
+        android:paddingTop="@dimen/carousel_padding_vertical"
+        android:paddingBottom="@dimen/carousel_padding_vertical" />
 
 </LinearLayout>

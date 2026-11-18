@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Shared TV overscan safe inset for title + carousel.
+      Leanback's lb_browse_padding_start is only 56dp; Kirill's TCL still clips
+      header/first card at ~48–56dp (framebuffer x≈96–112 falls under the bezel).
+      96dp (~10% of a 960dp-wide 1080p UI) keeps focus stroke + labels inside
+      the visible panel without spacer items.
+    -->
+    <dimen name="tv_safe_inset_horizontal">96dp</dimen>
+    <!-- Extra grid padding so BOTH_EDGE parks the focus stroke inside the safe area. -->
+    <dimen name="carousel_focus_inset">12dp</dimen>
+    <dimen name="carousel_padding_vertical">36dp</dimen>
+</resources>
