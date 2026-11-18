@@ -1,9 +1,12 @@
 package com.kisuro.fireplace.tv.ui
 
+import android.graphics.Outline
 import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.leanback.widget.Presenter
@@ -17,6 +20,9 @@ import com.kisuro.fireplace.tv.data.FireplaceVideo
  * Thumbnails are bound synchronously via [ImageView.setImageResource] from the
  * catalog's required [FireplaceVideo.thumbnailResId] — never remote YouTube
  * previews, never Coil (async recycle races could show the wrong frame).
+ *
+ * Card chrome and thumbnail share [R.dimen.card_corner_radius]; the image is
+ * clipped with [View.clipToOutline] so corners match the focus stroke.
  */
 class VideoCardPresenter : Presenter() {
 
@@ -38,6 +44,11 @@ class VideoCardPresenter : Presenter() {
         }
         view.isFocusable = true
         view.isFocusableInTouchMode = true
+
+        val radiusPx = parent.resources.getDimension(R.dimen.card_corner_radius)
+        applyRoundClip(view, radiusPx)
+        view.findViewById<ImageView>(R.id.card_image)?.let { applyRoundClip(it, radiusPx) }
+
         return ViewHolder(view)
     }
 
@@ -76,6 +87,15 @@ class VideoCardPresenter : Presenter() {
         image.setImageDrawable(null)
         image.tag = null
         image.contentDescription = null
+    }
+
+    private fun applyRoundClip(view: View, radiusPx: Float) {
+        view.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(v: View, outline: Outline) {
+                outline.setRoundRect(0, 0, v.width, v.height, radiusPx)
+            }
+        }
+        view.clipToOutline = true
     }
 
     private fun unwrapVideo(item: Any): FireplaceVideo? {

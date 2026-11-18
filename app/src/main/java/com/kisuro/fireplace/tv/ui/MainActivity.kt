@@ -30,11 +30,11 @@ import kotlin.math.max
  * left-parked) child's left edge sits at **-padding**, i.e. mostly off-screen.
  * Bigger padding made the clip worse, not better.
  *
- * Fix: [WINDOW_ALIGN_NO_EDGE] with a **window keyline** at the safe inset and
- * item alignment on the child's left edge (percent 0, no padding offset).
- * Every selected card — first, middle, or scrolled to the left — parks its
- * left edge on that keyline, matching the "Fireplace" title indent. No
- * horizontal grid padding (it fought BOTH_EDGE); vertical pad only.
+ * Fix: [WINDOW_ALIGN_NO_EDGE] with a **window keyline** at the safe inset
+ * (80dp / ≥7% width — tightened from 160dp/14% empty gutters) and item
+ * alignment on the child's left edge (percent 0, no padding offset).
+ * Every selected card parks its left edge on that keyline, matching the
+ * title indent. No horizontal grid padding; vertical pad only.
  */
 class MainActivity : FragmentActivity() {
 
@@ -208,7 +208,8 @@ class MainActivity : FragmentActivity() {
 
     /**
      * Safe inset used as the Leanback window keyline (and title margin).
-     * Floor at 14% of panel width for TCL-class overscan.
+     * Floor at 7% of panel width — tight enough to avoid wide empty gutters,
+     * still clear of TCL overscan + focus stroke.
      */
     private fun resolveSafeInsetPx(): Int {
         val fromXml = resources.getDimensionPixelSize(R.dimen.tv_safe_inset_horizontal)
@@ -265,6 +266,6 @@ class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "FireplaceMain"
         private const val FOCUS_SCALE_Y = 1.02f
-        private const val SAFE_INSET_WIDTH_FRACTION = 0.14f
+        private const val SAFE_INSET_WIDTH_FRACTION = 0.07f
     }
 }

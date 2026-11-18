@@ -5,6 +5,7 @@
     android:layout_height="wrap_content"
     android:background="@drawable/card_background"
     android:clickable="true"
+    android:clipToOutline="true"
     android:focusable="true"
     android:focusableInTouchMode="true"
     android:orientation="vertical"
@@ -14,7 +15,8 @@
         android:id="@+id/card_image"
         android:layout_width="match_parent"
         android:layout_height="180dp"
-        android:background="@color/fireplace_card"
+        android:background="@drawable/card_image_rounded"
+        android:clipToOutline="true"
         android:contentDescription="@null"
         android:scaleType="centerCrop" />
 

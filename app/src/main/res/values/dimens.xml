@@ -2,12 +2,14 @@
 <resources>
     <!--
       Leanback window keyline + title margin (not HorizontalGridView padding).
-      BOTH_EDGE with large padding computed minScroll = minEdge - padding and
-      parked focused cards mostly off-screen to the left on TCL. Keyline at
-      160dp (~17% of 960dp-wide 1080p UI); runtime also floors at 14% width.
+      80dp (~8% of a 960dp-wide 1080p UI) — enough for focus stroke + TCL
+      overscan without wide empty side gutters (160dp/14% was too wide).
+      Runtime also floors at 7% of panel width.
     -->
-    <dimen name="tv_safe_inset_horizontal">160dp</dimen>
+    <dimen name="tv_safe_inset_horizontal">80dp</dimen>
     <!-- Kept for reference; horizontal focus inset is unused with NO_EDGE keyline. -->
     <dimen name="carousel_focus_inset">16dp</dimen>
     <dimen name="carousel_padding_vertical">36dp</dimen>
+    <!-- Card chrome + focus stroke; image uses the same radius via clipToOutline. -->
+    <dimen name="card_corner_radius">14dp</dimen>
 </resources>
