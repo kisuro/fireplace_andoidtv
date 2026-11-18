@@ -57,27 +57,11 @@ class VideoCardPresenter : Presenter() {
             "Loop"
         }
 
-        val localThumb = video.thumbnailResId
-        if (localThumb != null) {
-            image.load(localThumb) {
-                placeholder(R.drawable.card_placeholder)
-                error(R.drawable.card_placeholder)
-                crossfade(true)
-            }
-        } else {
-            image.load(video.maxThumbnailUrl) {
-                placeholder(R.drawable.card_placeholder)
-                error(R.drawable.card_placeholder)
-                crossfade(true)
-                listener(
-                    onError = { _, _ ->
-                        image.load(video.thumbnailUrl) {
-                            placeholder(R.drawable.card_placeholder)
-                            error(R.drawable.card_placeholder)
-                        }
-                    },
-                )
-            }
+        // Always load the bundled clean frame — never remote YouTube thumbs.
+        image.load(video.thumbnailResId) {
+            placeholder(R.drawable.card_placeholder)
+            error(R.drawable.card_placeholder)
+            crossfade(true)
         }
     }
 

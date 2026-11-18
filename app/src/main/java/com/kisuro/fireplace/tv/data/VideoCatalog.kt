@@ -2,6 +2,13 @@ package com.kisuro.fireplace.tv.data
 
 import com.kisuro.fireplace.tv.R
 
+/**
+ * Static fireplace catalog.
+ *
+ * When adding a video: extract a clean mid-video frame (no titles/watermarks),
+ * drop it in `res/drawable-nodpi/thumb_fireplace_<id>.webp`, and pass that
+ * drawable as [FireplaceVideo.thumbnailResId]. Do not wire YouTube thumb URLs.
+ */
 object VideoCatalog {
     val videos: List<FireplaceVideo> = listOf(
         FireplaceVideo(
@@ -37,7 +44,7 @@ object VideoCatalog {
             title = "Warm Embers",
             youtubeId = "gQb5YzLFIno",
             isLive = false,
-            // YouTube maxres is already a clean frame — keep remote.
+            thumbnailResId = R.drawable.thumb_fireplace_5,
         ),
         FireplaceVideo(
             id = "6",
@@ -51,6 +58,7 @@ object VideoCatalog {
             title = "Wood Fire Sleep",
             youtubeId = "w3j6dMm1-fU",
             isLive = false,
+            thumbnailResId = R.drawable.thumb_fireplace_7,
         ),
     )
 
