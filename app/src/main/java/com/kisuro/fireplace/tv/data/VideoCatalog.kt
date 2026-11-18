@@ -60,6 +60,41 @@ object VideoCatalog {
             isLive = false,
             thumbnailResId = R.drawable.thumb_fireplace_7,
         ),
+        FireplaceVideo(
+            id = "8",
+            title = "Night Cozy Hearth",
+            youtubeId = "k89ksrBBdX8",
+            isLive = false,
+            thumbnailResId = R.drawable.thumb_fireplace_8,
+        ),
+        FireplaceVideo(
+            id = "9",
+            title = "Modern Stone Flames",
+            youtubeId = "AXJGm3DOdIs",
+            isLive = false,
+            thumbnailResId = R.drawable.thumb_fireplace_9,
+        ),
+        FireplaceVideo(
+            id = "10",
+            title = "Lake Bonfire",
+            youtubeId = "4ApMS8qYWo0",
+            isLive = false,
+            thumbnailResId = R.drawable.thumb_fireplace_10,
+        ),
+        FireplaceVideo(
+            id = "11",
+            title = "Rustic Crackling",
+            youtubeId = "vU2zX8ICyDg",
+            isLive = false,
+            thumbnailResId = R.drawable.thumb_fireplace_11,
+        ),
+        FireplaceVideo(
+            id = "12",
+            title = "Christmas Hearth",
+            youtubeId = "QL3KtoxXUco",
+            isLive = false,
+            thumbnailResId = R.drawable.thumb_fireplace_12,
+        ),
     )
 
     fun findById(id: String): FireplaceVideo? = videos.firstOrNull { it.id == id }
