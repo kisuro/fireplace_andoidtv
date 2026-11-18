@@ -7,16 +7,14 @@
       Runtime also floors at 7% of panel width.
     -->
     <dimen name="tv_safe_inset_horizontal">80dp</dimen>
-    <!-- Kept for reference; horizontal focus inset is unused with NO_EDGE keyline. -->
     <dimen name="carousel_focus_inset">16dp</dimen>
     <dimen name="carousel_padding_vertical">36dp</dimen>
-    <!-- Card chrome + focus stroke; image uses the same radius via clipToOutline. -->
     <dimen name="card_corner_radius">14dp</dimen>
-    <!-- Hero fills leftover height; these floors keep it visible on short panels. -->
-    <dimen name="hero_min_height">220dp</dimen>
-    <dimen name="hero_image_min_height">180dp</dimen>
-    <!-- Narrower hero than full keyline width (also floored at 18% side inset in code). -->
-    <dimen name="hero_side_margin">160dp</dimen>
+    <!-- Floor for the weighted hero host; actual 16:9 box is sized in code. -->
+    <dimen name="hero_min_height">200dp</dimen>
+    <!-- Default 16:9 preview box (overridden at runtime to fit the host). -->
+    <dimen name="hero_preview_width">480dp</dimen>
+    <dimen name="hero_preview_height">270dp</dimen>
     <!-- Fixed carousel row so LinearLayout weight above cannot collapse to 0. -->
     <dimen name="carousel_row_height">156dp</dimen>
     <dimen name="carousel_card_width">140dp</dimen>

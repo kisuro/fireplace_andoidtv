@@ -33,10 +33,8 @@
         android:textSize="16sp" />
 
     <!--
-      Hero fills remaining height ABOVE the fixed-height carousel.
-      HorizontalGridView must NOT be wrap_content here — Leanback wrap
-      measure can consume all leftover space and collapse this weight child
-      to 0 height (Mac ADB v1.0.20: FrameLayout h=0 at y=225).
+      Host for a centered 16:9 hero preview (sized in code). Weight keeps a
+      non-zero region above the fixed-height carousel.
     -->
     <FrameLayout
         android:id="@+id/hero_container"
@@ -50,14 +48,11 @@
         <include
             android:id="@+id/hero_card"
             layout="@layout/item_hero_card"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center"
-            android:layout_marginStart="@dimen/hero_side_margin"
-            android:layout_marginEnd="@dimen/hero_side_margin" />
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
     </FrameLayout>
 
-    <!-- Fixed row height so weight above gets a real non-zero leftover. -->
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/video_carousel"
         android:layout_width="match_parent"
