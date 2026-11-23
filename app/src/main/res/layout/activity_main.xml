@@ -1,68 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/main_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_browse"
     android:clipChildren="false"
-    android:clipToPadding="false"
-    android:orientation="vertical"
-    android:paddingTop="24dp"
-    android:paddingBottom="12dp">
+    android:clipToPadding="false">
 
-    <TextView
-        android:id="@+id/browse_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
-        android:layout_marginEnd="@dimen/tv_safe_inset_horizontal"
-        android:text="@string/browse_title"
-        android:textColor="@color/fireplace_text"
-        android:textSize="32sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/browse_subtitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="@dimen/tv_safe_inset_horizontal"
-        android:text="@string/browse_subtitle"
-        android:textColor="@color/fireplace_text_dim"
-        android:textSize="16sp" />
-
-    <!--
-      Host for a centered 16:9 hero preview (sized in code). Weight keeps a
-      non-zero region above the fixed-height carousel.
-    -->
-    <FrameLayout
-        android:id="@+id/hero_container"
+    <LinearLayout
+        android:id="@+id/main_content"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_weight="1"
-        android:clipChildren="false"
-        android:minHeight="@dimen/hero_min_height">
-
-        <include
-            android:id="@+id/hero_card"
-            layout="@layout/item_hero_card"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center" />
-    </FrameLayout>
-
-    <androidx.leanback.widget.HorizontalGridView
-        android:id="@+id/video_carousel"
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/carousel_row_height"
-        android:layout_marginTop="8dp"
+        android:layout_height="match_parent"
         android:clipChildren="false"
         android:clipToPadding="false"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp" />
+        android:orientation="vertical"
+        android:paddingTop="24dp"
+        android:paddingBottom="12dp">
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/browse_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
+            android:layout_marginEnd="@dimen/tv_safe_inset_horizontal"
+            android:text="@string/browse_title"
+            android:textColor="@color/fireplace_text"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/browse_header_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="@dimen/tv_safe_inset_horizontal"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/browse_subtitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/browse_subtitle"
+                android:textColor="@color/fireplace_text_dim"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/sound_open_button"
+                style="@style/SoundChip"
+                android:text="@string/sound_open"
+                android:nextFocusDown="@id/video_carousel" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/ambient_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/tv_safe_inset_horizontal"
+            android:layout_marginTop="2dp"
+            android:layout_marginEnd="@dimen/tv_safe_inset_horizontal"
+            android:text="@string/sound_status_off"
+            android:textColor="@color/fireplace_text_dim"
+            android:textSize="13sp" />
+
+        <!--
+          Host for a centered 16:9 hero preview (sized in code). Weight keeps a
+          non-zero region above the fixed-height carousel.
+        -->
+        <FrameLayout
+            android:id="@+id/hero_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="12dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:minHeight="@dimen/hero_min_height">
+
+            <include
+                android:id="@+id/hero_card"
+                layout="@layout/item_hero_card"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center" />
+        </FrameLayout>
+
+        <androidx.leanback.widget.HorizontalGridView
+            android:id="@+id/video_carousel"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/carousel_row_height"
+            android:layout_marginTop="8dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
+    </LinearLayout>
+</FrameLayout>

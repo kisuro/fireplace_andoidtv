@@ -19,4 +19,5 @@
     <dimen name="carousel_row_height">110dp</dimen>
     <dimen name="carousel_card_width">140dp</dimen>
     <dimen name="carousel_image_height">78dp</dimen>
+    <dimen name="sound_chip_gap">10dp</dimen>
 </resources>

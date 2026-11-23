@@ -12,4 +12,26 @@
     <string name="error_bot_check">YouTube blocked this network (bot check). Try again on your home Wi‑Fi.</string>
     <string name="error_hint">Press Back to return</string>
     <string name="live_badge">LIVE</string>
+
+    <string name="sound_panel_title">Sound</string>
+    <string name="sound_panel_hint">Fireplace crackle and ambient nature are separate. Back closes.</string>
+    <string name="sound_fireplace_crackle">Fireplace crackle</string>
+    <string name="sound_ambient">Ambient nature</string>
+    <string name="sound_ambient_volume">Ambient volume</string>
+    <string name="sound_on">On</string>
+    <string name="sound_off">Off</string>
+    <string name="sound_volume_soft">Soft</string>
+    <string name="sound_volume_medium">Medium</string>
+    <string name="sound_volume_loud">Loud</string>
+    <string name="sound_open">Sound</string>
+    <string name="sound_status_off">Ambient off</string>
+    <string name="sound_status_on">Ambient · %1$s</string>
+    <string name="player_sound_hint">Press Up for sound</string>
+
+    <string name="ambient_rain">Rain</string>
+    <string name="ambient_forest">Forest</string>
+    <string name="ambient_thunderstorm">Thunderstorm</string>
+    <string name="ambient_stream">Stream</string>
+    <string name="ambient_wind">Wind</string>
+    <string name="ambient_birds">Birds</string>
 </resources>
