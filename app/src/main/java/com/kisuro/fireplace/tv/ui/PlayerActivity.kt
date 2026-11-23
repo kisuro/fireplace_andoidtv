@@ -170,7 +170,7 @@ class PlayerActivity : AppCompatActivity() {
         if (now - lastCatalogSwitchUptimeMs < CATALOG_SWITCH_DEBOUNCE_MS) {
             return
         }
-        val next = VideoCatalog.neighbor(current.id, delta) ?: return
+        val next = VideoCatalog.neighbor(this, current.id, delta) ?: return
         if (next.id == current.id) return
         lastCatalogSwitchUptimeMs = now
         Log.i(

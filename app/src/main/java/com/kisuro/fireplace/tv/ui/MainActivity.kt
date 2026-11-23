@@ -11,7 +11,9 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.FragmentActivity
 import androidx.leanback.widget.ArrayObjectAdapter
@@ -24,6 +26,7 @@ import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.RecyclerView
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.AudioPrefsStore
+import com.kisuro.fireplace.tv.data.CatalogPrefsStore
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
@@ -44,6 +47,11 @@ import kotlin.math.roundToInt
  * Browse: centered 16:9 hero preview (not focusable) + carousel focus only.
  * Strip selection updates the muted preview; OK on a strip card plays fullscreen.
  * Sound chip opens ambient / fireplace-crackle prefs (ambient off by default).
+ *
+ * Favorites / filter / reorder:
+ * - Filter chip toggles favorites-only (persisted).
+ * - Fav chip toggles favorite for the focused strip card.
+ * - Long-press enters move mode: Left/Right swap, OK commits, Back cancels.
  */
 @UnstableApi
 class MainActivity : FragmentActivity() {
@@ -58,8 +66,13 @@ class MainActivity : FragmentActivity() {
     private lateinit var heroTitle: TextView
     private lateinit var heroMeta: TextView
     private lateinit var heroPreview: HeroPreviewController
+    private lateinit var browseSubtitle: TextView
+    private lateinit var filterChip: TextView
+    private lateinit var favoriteChip: TextView
     private lateinit var soundOpenButton: TextView
     private lateinit var ambientStatus: TextView
+    private lateinit var emptyFavorites: LinearLayout
+    private lateinit var emptyShowAllChip: TextView
     private lateinit var soundPanel: SoundPanelController
     private lateinit var ambientPlayer: AmbientSoundPlayer
 
@@ -67,6 +80,12 @@ class MainActivity : FragmentActivity() {
     private var suppressHeroSync: Boolean = false
     private var lastHeroMediaW: Int = -1
     private var lastHeroMediaH: Int = -1
+
+    /** When non-null, carousel is in reorder mode; value is the order snapshot to restore on cancel. */
+    private var moveOrderSnapshot: List<String>? = null
+
+    private val isMoveMode: Boolean
+        get() = moveOrderSnapshot != null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,14 +102,26 @@ class MainActivity : FragmentActivity() {
         applyHorizontalInset(findViewById(R.id.browse_header_row), safeInset)
         applyHorizontalInset(findViewById(R.id.ambient_status), safeInset)
 
+        browseSubtitle = findViewById(R.id.browse_subtitle)
+        filterChip = findViewById(R.id.filter_chip)
+        favoriteChip = findViewById(R.id.favorite_chip)
         soundOpenButton = findViewById(R.id.sound_open_button)
         ambientStatus = findViewById(R.id.ambient_status)
+        emptyFavorites = findViewById(R.id.empty_favorites)
+        emptyShowAllChip = findViewById(R.id.empty_show_all_chip)
         ambientPlayer = AmbientSoundPlayer(this)
         soundPanel = SoundPanelController(findViewById(R.id.main_root)) {
             applyAudioPrefs()
         }
         soundOpenButton.setOnClickListener { soundPanel.show() }
-        soundOpenButton.nextFocusDownId = R.id.video_carousel
+        filterChip.setOnClickListener { toggleFavoritesFilter() }
+        favoriteChip.setOnClickListener { toggleFavoriteForCurrent() }
+        emptyShowAllChip.setOnClickListener {
+            CatalogPrefsStore.setFavoritesOnly(this, false)
+            reloadCarousel(preferId = currentVideo?.id)
+        }
+
+        wireChipFocus(filterChip, favoriteChip, soundOpenButton)
 
         heroContainer = findViewById(R.id.hero_container)
         heroContainer.minimumHeight = resources.getDimensionPixelSize(R.dimen.hero_min_height)
@@ -141,10 +172,7 @@ class MainActivity : FragmentActivity() {
         carousel.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         carousel.horizontalSpacing = dp(10f)
 
-        objectAdapter = ArrayObjectAdapter(VideoCardPresenter()).apply {
-            VideoCatalog.visibleVideos.forEach { add(it) }
-        }
-
+        objectAdapter = ArrayObjectAdapter(VideoCardPresenter())
         val bridgeAdapter = ItemBridgeAdapter(objectAdapter)
         bridgeAdapter.setAdapterListener(
             object : ItemBridgeAdapter.AdapterListener() {
@@ -152,6 +180,7 @@ class MainActivity : FragmentActivity() {
                     viewHolder.itemView.isFocusable = true
                     viewHolder.itemView.isClickable = true
                     viewHolder.itemView.isFocusableInTouchMode = true
+                    viewHolder.itemView.isLongClickable = true
                 }
 
                 override fun onBind(viewHolder: ItemBridgeAdapter.ViewHolder) {
@@ -161,8 +190,17 @@ class MainActivity : FragmentActivity() {
                         else -> return
                     }
                     viewHolder.itemView.setOnClickListener {
+                        if (isMoveMode) {
+                            exitMoveMode(commit = true)
+                            return@setOnClickListener
+                        }
                         bindHero(video)
                         openPlayer(video)
+                    }
+                    viewHolder.itemView.setOnLongClickListener {
+                        if (isMoveMode) return@setOnLongClickListener true
+                        enterMoveMode()
+                        true
                     }
                     viewHolder.itemView.setOnFocusChangeListener { v, hasFocus ->
                         if (v.width > 0 && v.height > 0) {
@@ -171,6 +209,9 @@ class MainActivity : FragmentActivity() {
                         }
                         val scaleY = if (hasFocus) CAROUSEL_FOCUS_SCALE_Y else 1f
                         v.animate().scaleX(1f).scaleY(scaleY).setDuration(120).start()
+                        if (hasFocus) {
+                            updateFavoriteChip()
+                        }
                     }
                 }
             },
@@ -188,43 +229,53 @@ class MainActivity : FragmentActivity() {
                     if (suppressHeroSync) return
                     val video = objectAdapter.get(position) as? FireplaceVideo ?: return
                     bindHero(video)
+                    updateFavoriteChip()
                 }
             },
         )
 
-        // DPAD stays on the strip — UP moves to the Sound chip (not the hero).
+        // DPAD stays on the strip — UP moves to chips (not the hero).
         carousel.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_RIGHT -> moveSelection(+1)
-                KeyEvent.KEYCODE_DPAD_LEFT -> moveSelection(-1)
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (isMoveMode) reorderSelection(+1) else moveSelection(+1)
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (isMoveMode) reorderSelection(-1) else moveSelection(-1)
+                }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    soundOpenButton.requestFocus()
+                    if (isMoveMode) return@setOnKeyListener true
+                    filterChip.requestFocus()
                     true
                 }
                 KeyEvent.KEYCODE_MENU -> {
+                    if (isMoveMode) return@setOnKeyListener true
                     soundPanel.toggle()
                     true
+                }
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                    if (isMoveMode) {
+                        exitMoveMode(commit = false)
+                        true
+                    } else {
+                        false
+                    }
                 }
                 else -> false
             }
         }
 
-        val initial = LastPlayedStore.resolveVideo(this)
-        val initialIndex = indexOfVideo(initial.id).coerceAtLeast(0)
-        Log.i(TAG, "restore lastPlayed id=${initial.id} index=$initialIndex")
-        bindHero(initial)
-        carousel.post {
-            settleOnIndex(initialIndex, smooth = false)
-        }
-        carousel.postDelayed({
-            settleOnIndex(initialIndex, smooth = false)
-        }, 200)
+        reloadCarousel(preferId = LastPlayedStore.getVideoId(this))
 
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
+                    if (isMoveMode) {
+                        exitMoveMode(commit = false)
+                        return
+                    }
                     if (soundPanel.isVisible) {
                         soundPanel.hide()
                         carousel.requestFocus()
@@ -279,9 +330,7 @@ class MainActivity : FragmentActivity() {
         objectAdapter.removeItems(index, 1)
         if (objectAdapter.size() == 0) {
             currentVideo = null
-            heroTitle.text = getString(R.string.app_name)
-            heroMeta.text = ""
-            if (::heroPreview.isInitialized) heroPreview.release()
+            applyEmptyOrHeroState()
             return
         }
         if (currentVideo?.id == id) {
@@ -295,6 +344,7 @@ class MainActivity : FragmentActivity() {
                 settleOnIndex(objectAdapter.size() - 1, smooth = false)
             }
         }
+        updateChrome()
     }
 
     private fun indexOfVideo(id: String): Int {
@@ -309,6 +359,12 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         if (!::carousel.isInitialized) return
+        if (isMoveMode) return
+        val browse = VideoCatalog.browseVideos(this)
+        if (browse.isEmpty()) {
+            applyEmptyOrHeroState()
+            return
+        }
         val restored = LastPlayedStore.resolveVideo(this)
         val index = indexOfVideo(restored.id).coerceAtLeast(0)
         bindHero(restored)
@@ -316,6 +372,7 @@ class MainActivity : FragmentActivity() {
             heroPreview.resume(restored)
         }
         applyAudioPrefs()
+        updateChrome()
         carousel.post {
             settleOnIndex(index, smooth = false)
         }
@@ -351,6 +408,159 @@ class MainActivity : FragmentActivity() {
             getString(R.string.sound_status_on, getString(sound.titleRes))
         } else {
             getString(R.string.sound_status_off)
+        }
+    }
+
+    private fun toggleFavoritesFilter() {
+        if (isMoveMode) exitMoveMode(commit = true)
+        val next = !CatalogPrefsStore.isFavoritesOnly(this)
+        CatalogPrefsStore.setFavoritesOnly(this, next)
+        reloadCarousel(preferId = currentVideo?.id)
+    }
+
+    private fun toggleFavoriteForCurrent() {
+        if (isMoveMode) return
+        val video = currentVideo ?: return
+        val favored = CatalogPrefsStore.toggleFavorite(this, video.id)
+        Toast.makeText(
+            this,
+            if (favored) R.string.favorite_added else R.string.favorite_removed,
+            Toast.LENGTH_SHORT,
+        ).show()
+        if (CatalogPrefsStore.isFavoritesOnly(this) && !favored) {
+            reloadCarousel(preferId = null)
+        } else {
+            objectAdapter.notifyItemRangeChanged(0, objectAdapter.size())
+            updateChrome()
+        }
+    }
+
+    private fun enterMoveMode() {
+        if (objectAdapter.size() < 2) return
+        moveOrderSnapshot = CatalogPrefsStore.resolveOrder(this, VideoCatalog.videos.map { it.id })
+        updateChrome()
+        Log.i(TAG, "move mode enter focus=${currentVideo?.id}")
+    }
+
+    private fun exitMoveMode(commit: Boolean) {
+        val snapshot = moveOrderSnapshot ?: return
+        if (!commit) {
+            CatalogPrefsStore.setOrder(this, snapshot)
+            reloadCarousel(preferId = currentVideo?.id)
+            moveOrderSnapshot = null
+            updateChrome()
+            Log.i(TAG, "move mode cancel")
+            return
+        }
+        moveOrderSnapshot = null
+        updateChrome()
+        Log.i(TAG, "move mode commit")
+    }
+
+    private fun reorderSelection(delta: Int): Boolean {
+        val last = objectAdapter.size() - 1
+        if (last < 1) return true
+        val current = carousel.selectedPosition.coerceAtLeast(0)
+        val target = (current + delta).coerceIn(0, last)
+        if (target == current) return true
+        val a = objectAdapter.get(current) as? FireplaceVideo ?: return true
+        val b = objectAdapter.get(target) as? FireplaceVideo ?: return true
+        CatalogPrefsStore.swapInOrder(this, a.id, b.id)
+        // Swap adapter slots without full rebuild so focus stays on the moved card.
+        objectAdapter.replace(current, b)
+        objectAdapter.replace(target, a)
+        settleOnIndex(target, smooth = true)
+        Log.i(TAG, "reorder swap ${a.id}<->${b.id} -> pos $target")
+        return true
+    }
+
+    private fun reloadCarousel(preferId: String?) {
+        val browse = VideoCatalog.browseVideos(this)
+        objectAdapter.clear()
+        browse.forEach { objectAdapter.add(it) }
+        applyEmptyOrHeroState(preferId)
+        updateChrome()
+    }
+
+    private fun applyEmptyOrHeroState(preferId: String? = currentVideo?.id) {
+        val browse = VideoCatalog.browseVideos(this)
+        val emptyFavFilter = CatalogPrefsStore.isFavoritesOnly(this) && browse.isEmpty()
+        if (emptyFavFilter) {
+            emptyFavorites.visibility = View.VISIBLE
+            heroRoot.visibility = View.INVISIBLE
+            carousel.visibility = View.INVISIBLE
+            carousel.isFocusable = false
+            if (::heroPreview.isInitialized) heroPreview.release()
+            currentVideo = null
+            heroTitle.text = getString(R.string.browse_empty_favorites)
+            heroMeta.text = ""
+            emptyShowAllChip.post { emptyShowAllChip.requestFocus() }
+            return
+        }
+        emptyFavorites.visibility = View.GONE
+        heroRoot.visibility = View.VISIBLE
+        carousel.visibility = View.VISIBLE
+        carousel.isFocusable = true
+        if (browse.isEmpty()) {
+            currentVideo = null
+            heroTitle.text = getString(R.string.app_name)
+            heroMeta.text = ""
+            if (::heroPreview.isInitialized) heroPreview.release()
+            return
+        }
+        val pick = preferId?.let { id -> browse.firstOrNull { it.id == id } }
+            ?: LastPlayedStore.resolveVideo(this).takeIf { v -> browse.any { it.id == v.id } }
+            ?: browse.first()
+        val index = browse.indexOfFirst { it.id == pick.id }.coerceAtLeast(0)
+        bindHero(pick)
+        carousel.post {
+            settleOnIndex(index, smooth = false)
+        }
+    }
+
+    private fun updateChrome() {
+        val favoritesOnly = CatalogPrefsStore.isFavoritesOnly(this)
+        filterChip.text = if (favoritesOnly) {
+            getString(R.string.chip_filter_favorites)
+        } else {
+            getString(R.string.chip_filter_all)
+        }
+        filterChip.isSelected = favoritesOnly
+        browseSubtitle.text = if (isMoveMode) {
+            getString(R.string.browse_move_hint)
+        } else {
+            getString(R.string.browse_hint_actions)
+        }
+        updateFavoriteChip()
+        val chipsEnabled = !isMoveMode
+        filterChip.isEnabled = chipsEnabled
+        favoriteChip.isEnabled = chipsEnabled
+        soundOpenButton.isEnabled = chipsEnabled
+        filterChip.isFocusable = chipsEnabled
+        favoriteChip.isFocusable = chipsEnabled
+        soundOpenButton.isFocusable = chipsEnabled
+    }
+
+    private fun updateFavoriteChip() {
+        if (!::favoriteChip.isInitialized) return
+        val video = currentVideo
+        if (video == null) {
+            favoriteChip.text = getString(R.string.chip_favorite_add)
+            favoriteChip.isSelected = false
+            return
+        }
+        val favored = CatalogPrefsStore.isFavorite(this, video.id)
+        favoriteChip.text = if (favored) {
+            getString(R.string.chip_favorite_on)
+        } else {
+            getString(R.string.chip_favorite_add)
+        }
+        favoriteChip.isSelected = favored
+    }
+
+    private fun wireChipFocus(vararg chips: TextView) {
+        chips.forEach { chip ->
+            chip.nextFocusDownId = R.id.video_carousel
         }
     }
 
@@ -414,6 +624,7 @@ class MainActivity : FragmentActivity() {
         if (::heroPreview.isInitialized) {
             heroPreview.preview(video)
         }
+        updateFavoriteChip()
     }
 
     private fun moveSelection(delta: Int): Boolean {

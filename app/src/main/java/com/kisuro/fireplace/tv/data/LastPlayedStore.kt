@@ -25,12 +25,14 @@ object LastPlayedStore {
     }
 
     fun resolveVideo(context: Context): FireplaceVideo {
-        val visible = VideoCatalog.visibleVideos
+        val browse = VideoCatalog.browseVideos(context)
         val saved = getVideoId(context)?.let { id ->
-            visible.firstOrNull { it.id == id }
+            browse.firstOrNull { it.id == id }
         }
-        return saved
-            ?: visible.firstOrNull()
+        if (saved != null) return saved
+        browse.firstOrNull()?.let { return it }
+        // Favorites filter empty → fall back to full ordered strip for hero restore.
+        return VideoCatalog.orderedVisible(context).firstOrNull()
             ?: VideoCatalog.videos.first()
     }
 }

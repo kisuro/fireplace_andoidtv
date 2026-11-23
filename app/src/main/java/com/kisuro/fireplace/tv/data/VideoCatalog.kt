@@ -1,5 +1,6 @@
 package com.kisuro.fireplace.tv.data
 
+import android.content.Context
 import com.kisuro.fireplace.tv.R
 
 /**
@@ -21,7 +22,7 @@ object VideoCatalog {
     @Volatile
     private var hiddenIds: Set<String> = emptySet()
 
-    /** Catalog rows still shown in carousel / hero / player neighbors. */
+    /** Catalog rows still shown after availability hide (catalog order, no prefs). */
     val visibleVideos: List<FireplaceVideo>
         get() {
             val hidden = hiddenIds
@@ -38,6 +39,23 @@ object VideoCatalog {
 
     fun isHidden(id: String): Boolean = id in hiddenIds
 
+    /** Visible rows in the user's custom order (favorites filter not applied). */
+    fun orderedVisible(context: Context): List<FireplaceVideo> {
+        val byId = visibleVideos.associateBy { it.id }
+        val order = CatalogPrefsStore.resolveOrder(context, videos.map { it.id })
+        return order.mapNotNull { byId[it] }
+    }
+
+    /**
+     * Browse / player-neighbor list: custom order, availability hide, and
+     * optional favorites-only filter.
+     */
+    fun browseVideos(context: Context): List<FireplaceVideo> {
+        val ordered = orderedVisible(context)
+        if (!CatalogPrefsStore.isFavoritesOnly(context)) return ordered
+        val favorites = CatalogPrefsStore.getFavoriteIds(context)
+        return ordered.filter { it.id in favorites }
+    }
     val videos: List<FireplaceVideo> = listOf(
         FireplaceVideo(
             id = "1",
@@ -215,9 +233,12 @@ object VideoCatalog {
 
     fun findById(id: String): FireplaceVideo? = videos.firstOrNull { it.id == id }
 
-    /** Previous/next among [visibleVideos]; wraps at both ends. */
-    fun neighbor(currentId: String, delta: Int): FireplaceVideo? {
-        val list = visibleVideos
+    /**
+     * Previous/next among [browseVideos] (order + favorites filter); wraps.
+     * Falls back to [orderedVisible] when the browse list is empty.
+     */
+    fun neighbor(context: Context, currentId: String, delta: Int): FireplaceVideo? {
+        val list = browseVideos(context).ifEmpty { orderedVisible(context) }
         if (list.isEmpty()) return null
         val index = list.indexOfFirst { it.id == currentId }
         if (index < 0) return list.firstOrNull()
