@@ -43,9 +43,23 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/browse_subtitle"
+                android:text="@string/browse_hint_actions"
                 android:textColor="@color/fireplace_text_dim"
                 android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/filter_chip"
+                style="@style/SoundChip"
+                android:layout_marginEnd="8dp"
+                android:text="@string/chip_filter_all"
+                android:nextFocusDown="@id/video_carousel" />
+
+            <TextView
+                android:id="@+id/favorite_chip"
+                style="@style/SoundChip"
+                android:layout_marginEnd="8dp"
+                android:text="@string/chip_favorite_add"
+                android:nextFocusDown="@id/video_carousel" />
 
             <TextView
                 android:id="@+id/sound_open_button"
@@ -84,6 +98,38 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center" />
+
+            <LinearLayout
+                android:id="@+id/empty_favorites"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="24dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/browse_empty_favorites"
+                    android:textColor="@color/fireplace_text"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/browse_empty_favorites_hint"
+                    android:textColor="@color/fireplace_text_dim"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/empty_show_all_chip"
+                    style="@style/SoundChip"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/chip_show_all" />
+            </LinearLayout>
         </FrameLayout>
 
         <androidx.leanback.widget.HorizontalGridView

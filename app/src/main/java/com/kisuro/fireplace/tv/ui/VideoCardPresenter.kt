@@ -10,11 +10,12 @@ import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import androidx.leanback.widget.Presenter
 import com.kisuro.fireplace.tv.R
+import com.kisuro.fireplace.tv.data.CatalogPrefsStore
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 /**
  * Thumb-only carousel cards under the hero (no title/meta under the strip).
- * Labels for the selection stay on the hero card.
+ * Labels for the selection stay on the hero card. Star badge marks favorites.
  */
 class VideoCardPresenter : Presenter() {
 
@@ -32,6 +33,7 @@ class VideoCardPresenter : Presenter() {
         }
         view.isFocusable = true
         view.isFocusableInTouchMode = true
+        view.isLongClickable = true
 
         val radiusPx = parent.resources.getDimension(R.dimen.card_corner_radius)
         applyRoundClip(view, radiusPx)
@@ -47,16 +49,19 @@ class VideoCardPresenter : Presenter() {
         }
         val root = viewHolder.view
         val image = root.findViewById<ImageView>(R.id.card_image)
+        val badge = root.findViewById<ImageView>(R.id.card_favorite_badge)
 
         image.setImageDrawable(null)
         image.setImageResource(video.thumbnailResId)
         image.tag = video.id
         image.contentDescription = video.title
         root.contentDescription = video.title
+        val favored = CatalogPrefsStore.isFavorite(root.context, video.id)
+        badge.visibility = if (favored) View.VISIBLE else View.GONE
         Log.i(
             TAG,
             "bindCard id=${video.id} title=${video.title} " +
-                "youtubeId=${video.youtubeId} thumbRes=${video.thumbnailResId}",
+                "youtubeId=${video.youtubeId} thumbRes=${video.thumbnailResId} fav=$favored",
         )
     }
 
@@ -66,6 +71,7 @@ class VideoCardPresenter : Presenter() {
         image.tag = null
         image.contentDescription = null
         viewHolder.view.contentDescription = null
+        viewHolder.view.findViewById<ImageView>(R.id.card_favorite_badge)?.visibility = View.GONE
     }
 
     private fun applyRoundClip(view: View, radiusPx: Float) {
