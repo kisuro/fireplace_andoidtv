@@ -17,6 +17,7 @@ import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.HorizontalGridView
 import androidx.leanback.widget.ItemBridgeAdapter
 import androidx.leanback.widget.OnChildViewHolderSelectedListener
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.RecyclerView
@@ -24,6 +25,14 @@ import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
+import com.kisuro.fireplace.tv.extract.YoutubeStreamResolver
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -116,7 +125,7 @@ class MainActivity : FragmentActivity() {
         carousel.horizontalSpacing = dp(10f)
 
         objectAdapter = ArrayObjectAdapter(VideoCardPresenter()).apply {
-            VideoCatalog.videos.forEach { add(it) }
+            VideoCatalog.visibleVideos.forEach { add(it) }
         }
 
         val bridgeAdapter = ItemBridgeAdapter(objectAdapter)
@@ -178,7 +187,7 @@ class MainActivity : FragmentActivity() {
         }
 
         val initial = LastPlayedStore.resolveVideo(this)
-        val initialIndex = VideoCatalog.videos.indexOfFirst { it.id == initial.id }.coerceAtLeast(0)
+        val initialIndex = indexOfVideo(initial.id).coerceAtLeast(0)
         Log.i(TAG, "restore lastPlayed id=${initial.id} index=$initialIndex")
         bindHero(initial)
         carousel.post {
@@ -187,13 +196,82 @@ class MainActivity : FragmentActivity() {
         carousel.postDelayed({
             settleOnIndex(initialIndex, smooth = false)
         }, 200)
+
+        // Show strip immediately; probe YouTube availability in parallel and drop dead tiles.
+        startAvailabilityProbe()
+    }
+
+    /**
+     * Parallel NewPipe probes (capped concurrency). Confirmed-unavailable entries are
+     * removed from the carousel/hero; transient network/bot errors keep the tile.
+     */
+    private fun startAvailabilityProbe() {
+        val resolver = YoutubeStreamResolver()
+        val catalog = VideoCatalog.videos.toList()
+        lifecycleScope.launch {
+            val gate = Semaphore(AVAILABILITY_PARALLELISM)
+            Log.i(TAG, "availability probe start count=${catalog.size} parallel=$AVAILABILITY_PARALLELISM")
+            catalog.map { video ->
+                async(Dispatchers.IO) {
+                    gate.withPermit {
+                        val ok = resolver.probeAvailable(video.watchUrl, expectLive = video.isLive)
+                        video.id to ok
+                    }
+                }
+            }.awaitAll().forEach { (id, ok) ->
+                if (!ok) {
+                    withContext(Dispatchers.Main.immediate) {
+                        hideUnavailableVideo(id)
+                    }
+                }
+            }
+            Log.i(TAG, "availability probe done visible=${VideoCatalog.visibleVideos.size}")
+        }
+    }
+
+    private fun hideUnavailableVideo(id: String) {
+        if (!VideoCatalog.markUnavailable(id)) return
+        val index = indexOfVideo(id)
+        if (index < 0) {
+            Log.i(TAG, "hide unavailable id=$id (already absent from strip)")
+            return
+        }
+        Log.w(TAG, "hide unavailable id=$id index=$index title=${(objectAdapter.get(index) as? FireplaceVideo)?.title}")
+        objectAdapter.removeItems(index, 1)
+        if (objectAdapter.size() == 0) {
+            currentVideo = null
+            heroTitle.text = getString(R.string.app_name)
+            heroMeta.text = ""
+            if (::heroPreview.isInitialized) heroPreview.release()
+            return
+        }
+        if (currentVideo?.id == id) {
+            val next = LastPlayedStore.resolveVideo(this)
+            val nextIndex = indexOfVideo(next.id).coerceAtLeast(0)
+            bindHero(next)
+            settleOnIndex(nextIndex, smooth = false)
+        } else {
+            val selected = carousel.selectedPosition
+            if (selected >= objectAdapter.size()) {
+                settleOnIndex(objectAdapter.size() - 1, smooth = false)
+            }
+        }
+    }
+
+    private fun indexOfVideo(id: String): Int {
+        for (i in 0 until objectAdapter.size()) {
+            val item = objectAdapter.get(i)
+            val video = item as? FireplaceVideo ?: (item as? CarouselItem.Video)?.video
+            if (video?.id == id) return i
+        }
+        return -1
     }
 
     override fun onResume() {
         super.onResume()
         if (!::carousel.isInitialized) return
         val restored = LastPlayedStore.resolveVideo(this)
-        val index = VideoCatalog.videos.indexOfFirst { it.id == restored.id }.coerceAtLeast(0)
+        val index = indexOfVideo(restored.id).coerceAtLeast(0)
         bindHero(restored)
         if (::heroPreview.isInitialized) {
             heroPreview.resume(restored)
@@ -359,5 +437,7 @@ class MainActivity : FragmentActivity() {
         private const val SAFE_INSET_WIDTH_FRACTION = 0.07f
         /** Cap hero media width so the 16:9 box stays a preview, not near full-bleed. */
         private const val HERO_MAX_WIDTH_FRACTION = 0.52f
+        /** Cap concurrent NewPipe probes so launch stays snappy on TV SoCs. */
+        private const val AVAILABILITY_PARALLELISM = 4
     }
 }

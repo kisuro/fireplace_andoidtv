@@ -2,11 +2,19 @@ package com.kisuro.fireplace.tv.extract
 
 import android.util.Log
 import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException
+import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
+import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
+import org.schabi.newpipe.extractor.exceptions.PaidContentException
+import org.schabi.newpipe.extractor.exceptions.PrivateContentException
+import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
+import org.schabi.newpipe.extractor.exceptions.SignInConfirmNotBotException
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamType
 import org.schabi.newpipe.extractor.stream.VideoStream
+import java.io.IOException
 
 /**
  * Resolves YouTube watch/live URLs into ExoPlayer-ready media URLs via NewPipe Extractor.
@@ -16,6 +24,82 @@ import org.schabi.newpipe.extractor.stream.VideoStream
  * Quality: best available up to 4K when progressive/merged is used.
  */
 class YoutubeStreamResolver {
+
+    /**
+     * Lightweight catalog gate: true when NewPipe can see a playable stream.
+     * Returns false for private/deleted/region blocks and hard extract failures.
+     * Transient network / bot-check errors return true so we do not hide tiles on flaky Wi‑Fi.
+     */
+    fun probeAvailable(watchUrl: String, expectLive: Boolean = false): Boolean {
+        return try {
+            val info = StreamInfo.getInfo(ServiceList.YouTube, watchUrl)
+            val hls = info.hlsUrl.takeIf { it.isNotBlank() }
+            val dash = info.dashMpdUrl.takeIf { it.isNotBlank() }
+            if (hls != null || dash != null) {
+                Log.i(TAG, "probe ok adaptive id=${info.id}")
+                return true
+            }
+            if (expectLive) {
+                Log.w(TAG, "probe live without HLS/DASH id=${info.id}")
+                return false
+            }
+            val hasProgressive = info.videoStreams.any { it.content.isNotBlank() } ||
+                (info.videoOnlyStreams.any { it.content.isNotBlank() } &&
+                    info.audioStreams.any { it.content.isNotBlank() })
+            Log.i(TAG, "probe ok progressive=$hasProgressive id=${info.id}")
+            hasProgressive
+        } catch (e: ContentNotAvailableException) {
+            Log.w(TAG, "probe unavailable (content): ${e.message}")
+            false
+        } catch (e: PrivateContentException) {
+            Log.w(TAG, "probe unavailable (private): ${e.message}")
+            false
+        } catch (e: GeographicRestrictionException) {
+            Log.w(TAG, "probe unavailable (geo): ${e.message}")
+            false
+        } catch (e: AgeRestrictedContentException) {
+            Log.w(TAG, "probe unavailable (age): ${e.message}")
+            false
+        } catch (e: PaidContentException) {
+            Log.w(TAG, "probe unavailable (paid): ${e.message}")
+            false
+        } catch (e: ReCaptchaException) {
+            Log.w(TAG, "probe transient keep visible (recaptcha): ${e.message}")
+            true
+        } catch (e: SignInConfirmNotBotException) {
+            Log.w(TAG, "probe transient keep visible (bot): ${e.message}")
+            true
+        } catch (e: Exception) {
+            if (isTransientProbeError(e)) {
+                Log.w(TAG, "probe transient keep visible: ${e.javaClass.simpleName} ${e.message}")
+                true
+            } else {
+                Log.w(TAG, "probe hide (extract): ${e.javaClass.simpleName} ${e.message}")
+                false
+            }
+        }
+    }
+
+    private fun isTransientProbeError(error: Throwable): Boolean {
+        val text = buildString {
+            append(error.javaClass.simpleName)
+            append(' ')
+            append(error.message.orEmpty())
+            append(' ')
+            append(error.cause?.javaClass?.simpleName.orEmpty())
+            append(' ')
+            append(error.cause?.message.orEmpty())
+        }.lowercase()
+        return error is IOException ||
+            error.cause is IOException ||
+            "recaptcha" in text ||
+            "not a bot" in text ||
+            "login_required" in text ||
+            "signinconfirm" in text ||
+            "429" in text ||
+            "timeout" in text ||
+            "timed out" in text
+    }
 
     fun resolve(watchUrl: String, expectLive: Boolean = false): ResolvedStream {
         Log.i(TAG, "resolve start url=$watchUrl expectLive=$expectLive")

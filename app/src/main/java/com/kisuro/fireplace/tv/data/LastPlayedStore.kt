@@ -25,7 +25,12 @@ object LastPlayedStore {
     }
 
     fun resolveVideo(context: Context): FireplaceVideo {
-        val saved = getVideoId(context)?.let { VideoCatalog.findById(it) }
-        return saved ?: VideoCatalog.videos.first()
+        val visible = VideoCatalog.visibleVideos
+        val saved = getVideoId(context)?.let { id ->
+            visible.firstOrNull { it.id == id }
+        }
+        return saved
+            ?: visible.firstOrNull()
+            ?: VideoCatalog.videos.first()
     }
 }
