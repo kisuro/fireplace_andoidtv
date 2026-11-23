@@ -72,6 +72,8 @@ class PlayerActivity : AppCompatActivity() {
     private var lastPickedKey: String? = null
     private var qualityAppliedForTracks: Int = -1
     private var lastCatalogSwitchUptimeMs: Long = 0L
+    /** True after the initial catalog start-offset seek for this bind. */
+    private var appliedStartSeek: Boolean = false
 
     private val resolver = YoutubeStreamResolver()
 
@@ -108,7 +110,11 @@ class PlayerActivity : AppCompatActivity() {
         )
 
         video?.id?.let { LastPlayedStore.setVideoId(this, it) }
-        Log.i(TAG, "open videoId=${video?.id} yt=${video?.youtubeId} catalogLive=${video?.isLive}")
+        Log.i(
+            TAG,
+            "open videoId=${video?.id} yt=${video?.youtubeId} catalogLive=${video?.isLive} " +
+                "startMs=${video?.startPositionMs}",
+        )
         startPlayback(reason = "launch")
     }
 
@@ -274,6 +280,7 @@ class PlayerActivity : AppCompatActivity() {
         player = exo
         trackSelector = selector
         qualityAppliedForTracks = -1
+        appliedStartSeek = false
         playerView.player = exo
         exo.addListener(playerListener)
         exo.setMediaSource(mediaSource)
@@ -281,6 +288,20 @@ class PlayerActivity : AppCompatActivity() {
         exo.playWhenReady = true
         exo.prepare()
         showLoading(getString(R.string.loading_stream))
+    }
+
+    /** Seek VOD to catalog start offset (skip intro text); no-op for live / 0. */
+    private fun seekToCatalogStartIfNeeded(force: Boolean = false) {
+        if (isLivePlayback) return
+        val startMs = video?.startPositionMs ?: 0L
+        if (startMs <= 0L) return
+        val exo = player ?: return
+        if (!force && appliedStartSeek) return
+        val duration = exo.duration
+        val target = if (duration > 0L) startMs.coerceAtMost(duration.coerceAtLeast(0L)) else startMs
+        Log.i(TAG, "seek startMs=$target catalog=${video?.id} force=$force duration=$duration")
+        exo.seekTo(target)
+        appliedStartSeek = true
     }
 
     private fun buildDataSourceFactory(): HttpDataSource.Factory {
@@ -305,9 +326,25 @@ class PlayerActivity : AppCompatActivity() {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
                 consecutiveFailures = 0
+                seekToCatalogStartIfNeeded()
                 player?.currentTracks?.let { applyBestQualityOverride(it, reason = "ready") }
                 logSelectedVideoFormat()
                 hideOverlay()
+            }
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            // REPEAT_MODE_ALL restarts at 0 — jump back to catalog start offset.
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION &&
+                !isLivePlayback &&
+                (video?.startPositionMs ?: 0L) > 0L
+            ) {
+                appliedStartSeek = false
+                seekToCatalogStartIfNeeded(force = true)
             }
         }
 

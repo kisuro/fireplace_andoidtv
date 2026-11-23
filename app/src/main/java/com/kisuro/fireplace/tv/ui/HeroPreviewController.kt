@@ -80,7 +80,12 @@ class HeroPreviewController(
                     resolver.resolve(video.watchUrl, expectLive = video.isLive)
                 }
                 if (!isActive || gen != generation || paused || activeVideoId != video.id) return@launch
-                bind(resolved.playback, isLive = video.isLive || resolved.isLive, gen)
+                bind(
+                    resolved.playback,
+                    isLive = video.isLive || resolved.isLive,
+                    startPositionMs = video.startPositionMs,
+                    gen = gen,
+                )
             } catch (e: Exception) {
                 Log.w(TAG, "hero preview resolve fail id=${video.id}: ${e.message}")
                 // Keep still poster — preview is best-effort.
@@ -115,7 +120,12 @@ class HeroPreviewController(
         poster.visibility = View.VISIBLE
     }
 
-    private fun bind(source: PlaybackSource, isLive: Boolean, gen: Int) {
+    private fun bind(
+        source: PlaybackSource,
+        isLive: Boolean,
+        startPositionMs: Long,
+        gen: Int,
+    ) {
         if (gen != generation) return
         val dataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(OkHttpDownloader.USER_AGENT)
@@ -169,13 +179,40 @@ class HeroPreviewController(
         playerView.player = exo
         exo.volume = 0f
         exo.repeatMode = if (isLive) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL
+        var appliedStartSeek = false
         exo.addListener(
             object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (gen != generation) return
                     if (playbackState == Player.STATE_READY) {
+                        if (!isLive && startPositionMs > 0L && !appliedStartSeek) {
+                            val duration = exo.duration
+                            val target = if (duration > 0L) {
+                                startPositionMs.coerceAtMost(duration.coerceAtLeast(0L))
+                            } else {
+                                startPositionMs
+                            }
+                            exo.seekTo(target)
+                            appliedStartSeek = true
+                            Log.i(TAG, "hero seek startMs=$target")
+                        }
                         playerView.visibility = View.VISIBLE
                         poster.visibility = View.INVISIBLE
+                    }
+                }
+
+                override fun onPositionDiscontinuity(
+                    oldPosition: Player.PositionInfo,
+                    newPosition: Player.PositionInfo,
+                    reason: Int,
+                ) {
+                    if (gen != generation) return
+                    if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION &&
+                        !isLive &&
+                        startPositionMs > 0L
+                    ) {
+                        exo.seekTo(startPositionMs)
+                        appliedStartSeek = true
                     }
                 }
 
@@ -190,7 +227,11 @@ class HeroPreviewController(
         exo.setMediaSource(mediaSource)
         exo.playWhenReady = true
         exo.prepare()
-        Log.i(TAG, "hero preview playing live=$isLive source=${source::class.simpleName}")
+        Log.i(
+            TAG,
+            "hero preview playing live=$isLive startMs=$startPositionMs " +
+                "source=${source::class.simpleName}",
+        )
     }
 
     private fun releasePlayerOnly() {
