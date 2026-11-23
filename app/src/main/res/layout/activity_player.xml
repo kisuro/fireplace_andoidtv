@@ -51,4 +51,19 @@
             android:textSize="16sp"
             android:visibility="gone" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/player_sound_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="28dp"
+        android:background="#990B0705"
+        android:paddingStart="14dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="6dp"
+        android:text="@string/player_sound_hint"
+        android:textColor="@color/fireplace_text_dim"
+        android:textSize="14sp" />
 </FrameLayout>

@@ -12,6 +12,7 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.FragmentActivity
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.HorizontalGridView
@@ -22,10 +23,12 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.RecyclerView
 import com.kisuro.fireplace.tv.R
+import com.kisuro.fireplace.tv.data.AudioPrefsStore
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
 import com.kisuro.fireplace.tv.extract.YoutubeStreamResolver
+import com.kisuro.fireplace.tv.playback.AmbientSoundPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -40,6 +43,7 @@ import kotlin.math.roundToInt
 /**
  * Browse: centered 16:9 hero preview (not focusable) + carousel focus only.
  * Strip selection updates the muted preview; OK on a strip card plays fullscreen.
+ * Sound chip opens ambient / fireplace-crackle prefs (ambient off by default).
  */
 @UnstableApi
 class MainActivity : FragmentActivity() {
@@ -54,6 +58,10 @@ class MainActivity : FragmentActivity() {
     private lateinit var heroTitle: TextView
     private lateinit var heroMeta: TextView
     private lateinit var heroPreview: HeroPreviewController
+    private lateinit var soundOpenButton: TextView
+    private lateinit var ambientStatus: TextView
+    private lateinit var soundPanel: SoundPanelController
+    private lateinit var ambientPlayer: AmbientSoundPlayer
 
     private var currentVideo: FireplaceVideo? = null
     private var suppressHeroSync: Boolean = false
@@ -66,14 +74,23 @@ class MainActivity : FragmentActivity() {
 
         val safeInset = resolveSafeInsetPx()
 
-        findViewById<ViewGroup>(R.id.main_root).apply {
+        findViewById<ViewGroup>(R.id.main_content).apply {
             clipChildren = false
             clipToPadding = false
-            setPadding(0, paddingTop, 0, paddingBottom)
         }
 
         applyHorizontalInset(findViewById(R.id.browse_title), safeInset)
-        applyHorizontalInset(findViewById(R.id.browse_subtitle), safeInset)
+        applyHorizontalInset(findViewById(R.id.browse_header_row), safeInset)
+        applyHorizontalInset(findViewById(R.id.ambient_status), safeInset)
+
+        soundOpenButton = findViewById(R.id.sound_open_button)
+        ambientStatus = findViewById(R.id.ambient_status)
+        ambientPlayer = AmbientSoundPlayer(this)
+        soundPanel = SoundPanelController(findViewById(R.id.main_root)) {
+            applyAudioPrefs()
+        }
+        soundOpenButton.setOnClickListener { soundPanel.show() }
+        soundOpenButton.nextFocusDownId = R.id.video_carousel
 
         heroContainer = findViewById(R.id.hero_container)
         heroContainer.minimumHeight = resources.getDimensionPixelSize(R.dimen.hero_min_height)
@@ -175,13 +192,20 @@ class MainActivity : FragmentActivity() {
             },
         )
 
-        // DPAD stays on the strip — UP must not move focus to the hero.
+        // DPAD stays on the strip — UP moves to the Sound chip (not the hero).
         carousel.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> moveSelection(+1)
                 KeyEvent.KEYCODE_DPAD_LEFT -> moveSelection(-1)
-                KeyEvent.KEYCODE_DPAD_UP -> true // swallow — keep focus on carousel
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    soundOpenButton.requestFocus()
+                    true
+                }
+                KeyEvent.KEYCODE_MENU -> {
+                    soundPanel.toggle()
+                    true
+                }
                 else -> false
             }
         }
@@ -197,8 +221,23 @@ class MainActivity : FragmentActivity() {
             settleOnIndex(initialIndex, smooth = false)
         }, 200)
 
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (soundPanel.isVisible) {
+                        soundPanel.hide()
+                        carousel.requestFocus()
+                        return
+                    }
+                    finish()
+                }
+            },
+        )
+
         // Show strip immediately; probe YouTube availability in parallel and drop dead tiles.
         startAvailabilityProbe()
+        applyAudioPrefs()
     }
 
     /**
@@ -276,12 +315,16 @@ class MainActivity : FragmentActivity() {
         if (::heroPreview.isInitialized) {
             heroPreview.resume(restored)
         }
+        applyAudioPrefs()
         carousel.post {
             settleOnIndex(index, smooth = false)
         }
     }
 
     override fun onPause() {
+        if (::ambientPlayer.isInitialized) {
+            ambientPlayer.setPlaying(false)
+        }
         if (::heroPreview.isInitialized) {
             heroPreview.pause()
         }
@@ -289,10 +332,26 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
+        if (::ambientPlayer.isInitialized) {
+            ambientPlayer.release()
+        }
         if (::heroPreview.isInitialized) {
             heroPreview.release()
         }
         super.onDestroy()
+    }
+
+    private fun applyAudioPrefs() {
+        if (!::ambientPlayer.isInitialized) return
+        ambientPlayer.setPlaying(true)
+        ambientPlayer.sync()
+        if (!::ambientStatus.isInitialized) return
+        ambientStatus.text = if (AudioPrefsStore.isAmbientEnabled(this)) {
+            val sound = AudioPrefsStore.getAmbientSound(this)
+            getString(R.string.sound_status_on, getString(sound.titleRes))
+        } else {
+            getString(R.string.sound_status_off)
+        }
     }
 
     /**

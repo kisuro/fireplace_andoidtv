@@ -29,6 +29,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.PlayerView
 import com.kisuro.fireplace.tv.R
+import com.kisuro.fireplace.tv.data.AudioPrefsStore
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
@@ -36,6 +37,7 @@ import com.kisuro.fireplace.tv.extract.OkHttpDownloader
 import com.kisuro.fireplace.tv.extract.PlaybackSource
 import com.kisuro.fireplace.tv.extract.ResolvedStream
 import com.kisuro.fireplace.tv.extract.YoutubeStreamResolver
+import com.kisuro.fireplace.tv.playback.AmbientSoundPlayer
 import com.kisuro.fireplace.tv.playback.FireplacePlayerFactory
 import com.kisuro.fireplace.tv.playback.FireplaceQualityPicker
 import com.kisuro.fireplace.tv.playback.Vp9Policy
@@ -56,6 +58,9 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var statusProgress: ProgressBar
     private lateinit var statusMessage: TextView
     private lateinit var statusHint: TextView
+    private lateinit var soundHint: TextView
+    private lateinit var soundPanel: SoundPanelController
+    private lateinit var ambientPlayer: AmbientSoundPlayer
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
@@ -87,10 +92,16 @@ class PlayerActivity : AppCompatActivity() {
         statusProgress = findViewById(R.id.status_progress)
         statusMessage = findViewById(R.id.status_message)
         statusHint = findViewById(R.id.status_hint)
+        soundHint = findViewById(R.id.player_sound_hint)
 
         playerView.useController = false
         playerView.setControllerAutoShow(false)
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+
+        ambientPlayer = AmbientSoundPlayer(this)
+        soundPanel = SoundPanelController(findViewById(R.id.player_root)) {
+            applyAudioPrefs()
+        }
 
         val videoId = intent.getStringExtra(EXTRA_VIDEO_ID)
         video = videoId?.let { VideoCatalog.findById(it) }
@@ -103,7 +114,12 @@ class PlayerActivity : AppCompatActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
+                    if (soundPanel.isVisible) {
+                        soundPanel.hide()
+                        return
+                    }
                     releasePlayer()
+                    ambientPlayer.release()
                     finish()
                 }
             },
@@ -115,19 +131,32 @@ class PlayerActivity : AppCompatActivity() {
             "open videoId=${video?.id} yt=${video?.youtubeId} catalogLive=${video?.isLive} " +
                 "startMs=${video?.startPositionMs}",
         )
+        applyAudioPrefs()
         startPlayback(reason = "launch")
+        scheduleSoundHintFade()
     }
 
     /**
-     * In fullscreen playback, LEFT/RIGHT swap to the previous/next catalog
-     * fireplace without leaving [PlayerActivity]. BACK still finishes to carousel.
+     * In fullscreen playback, LEFT/RIGHT swap fireplaces; UP/MENU opens sound panel.
+     * BACK closes the panel first, then returns to the carousel.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (soundPanel.isVisible) {
+            // Let the overlay chips handle D-pad while the panel is open.
+            return super.dispatchKeyEvent(event)
+        }
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     val delta = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
                     switchCatalogVideo(delta)
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU -> {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    soundPanel.show()
+                    soundHint.visibility = View.GONE
                 }
                 return true
             }
@@ -159,8 +188,9 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        super.onStop()
+        ambientPlayer.setPlaying(false)
         releasePlayer()
+        super.onStop()
     }
 
     override fun onStart() {
@@ -168,6 +198,35 @@ class PlayerActivity : AppCompatActivity() {
         if (video != null && player == null) {
             startPlayback(reason = "restart")
         }
+        applyAudioPrefs()
+    }
+
+    override fun onDestroy() {
+        ambientPlayer.release()
+        super.onDestroy()
+    }
+
+    private fun applyAudioPrefs() {
+        if (::ambientPlayer.isInitialized) {
+            ambientPlayer.setPlaying(true)
+            ambientPlayer.sync()
+        }
+        val muted = AudioPrefsStore.isFireplaceMuted(this)
+        player?.volume = if (muted) 0f else 1f
+    }
+
+    private fun scheduleSoundHintFade() {
+        soundHint.visibility = View.VISIBLE
+        soundHint.alpha = 1f
+        soundHint.animate().cancel()
+        soundHint.postDelayed({
+            if (!isFinishing && !soundPanel.isVisible) {
+                soundHint.animate().alpha(0f).setDuration(600L).withEndAction {
+                    soundHint.visibility = View.GONE
+                    soundHint.alpha = 1f
+                }.start()
+            }
+        }, SOUND_HINT_VISIBLE_MS)
     }
 
     private fun startPlayback(reason: String) {
@@ -285,6 +344,7 @@ class PlayerActivity : AppCompatActivity() {
         exo.addListener(playerListener)
         exo.setMediaSource(mediaSource)
         exo.repeatMode = if (isLivePlayback) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL
+        exo.volume = if (AudioPrefsStore.isFireplaceMuted(this)) 0f else 1f
         exo.playWhenReady = true
         exo.prepare()
         showLoading(getString(R.string.loading_stream))
@@ -594,5 +654,6 @@ class PlayerActivity : AppCompatActivity() {
         private const val SOFT_RECOVERY_MAX_MS = 30_000L
         /** Calm pace when holding LEFT/RIGHT on the remote. */
         private const val CATALOG_SWITCH_DEBOUNCE_MS = 450L
+        private const val SOUND_HINT_VISIBLE_MS = 4_500L
     }
 }
