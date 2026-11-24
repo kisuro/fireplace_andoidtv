@@ -31,7 +31,7 @@ import com.kisuro.fireplace.tv.data.FireplaceVideo
 import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
 import com.kisuro.fireplace.tv.extract.YoutubeStreamResolver
-import com.kisuro.fireplace.tv.playback.AmbientSoundPlayer
+import com.kisuro.fireplace.tv.playback.AmbientSoundController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -75,7 +75,6 @@ class MainActivity : FragmentActivity() {
     private lateinit var emptyFavorites: LinearLayout
     private lateinit var emptyShowAllChip: TextView
     private lateinit var soundPanel: SoundPanelController
-    private lateinit var ambientPlayer: AmbientSoundPlayer
 
     private var currentVideo: FireplaceVideo? = null
     private var suppressHeroSync: Boolean = false
@@ -111,7 +110,6 @@ class MainActivity : FragmentActivity() {
         ambientStatus = findViewById(R.id.ambient_status)
         emptyFavorites = findViewById(R.id.empty_favorites)
         emptyShowAllChip = findViewById(R.id.empty_show_all_chip)
-        ambientPlayer = AmbientSoundPlayer(this)
         soundPanel = SoundPanelController(findViewById(R.id.main_root)) {
             applyAudioPrefs()
         }
@@ -360,6 +358,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Ambient is process-scoped — always refresh status/prefs on resume
+        // (including empty favorites / move mode); do not pause on activity pause.
+        applyAudioPrefs()
         if (!::carousel.isInitialized) return
         if (isMoveMode) return
         val browse = VideoCatalog.browseVideos(this)
@@ -373,7 +374,6 @@ class MainActivity : FragmentActivity() {
         if (::heroPreview.isInitialized) {
             heroPreview.resume(restored)
         }
-        applyAudioPrefs()
         updateChrome()
         carousel.post {
             settleOnIndex(index, smooth = false)
@@ -381,9 +381,6 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onPause() {
-        if (::ambientPlayer.isInitialized) {
-            ambientPlayer.setPlaying(false)
-        }
         if (::heroPreview.isInitialized) {
             heroPreview.pause()
         }
@@ -391,9 +388,6 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
-        if (::ambientPlayer.isInitialized) {
-            ambientPlayer.release()
-        }
         if (::heroPreview.isInitialized) {
             heroPreview.release()
         }
@@ -401,9 +395,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun applyAudioPrefs() {
-        if (!::ambientPlayer.isInitialized) return
-        ambientPlayer.setPlaying(true)
-        ambientPlayer.sync()
+        AmbientSoundController.sync(this)
         if (!::ambientStatus.isInitialized) return
         ambientStatus.text = if (AudioPrefsStore.isAmbientEnabled(this)) {
             val sound = AudioPrefsStore.getAmbientSound(this)

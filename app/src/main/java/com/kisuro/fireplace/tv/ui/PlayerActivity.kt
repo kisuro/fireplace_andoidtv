@@ -37,7 +37,7 @@ import com.kisuro.fireplace.tv.extract.OkHttpDownloader
 import com.kisuro.fireplace.tv.extract.PlaybackSource
 import com.kisuro.fireplace.tv.extract.ResolvedStream
 import com.kisuro.fireplace.tv.extract.YoutubeStreamResolver
-import com.kisuro.fireplace.tv.playback.AmbientSoundPlayer
+import com.kisuro.fireplace.tv.playback.AmbientSoundController
 import com.kisuro.fireplace.tv.playback.FireplacePlayerFactory
 import com.kisuro.fireplace.tv.playback.FireplaceQualityPicker
 import com.kisuro.fireplace.tv.playback.Vp9Policy
@@ -60,7 +60,6 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var statusHint: TextView
     private lateinit var soundHint: TextView
     private lateinit var soundPanel: SoundPanelController
-    private lateinit var ambientPlayer: AmbientSoundPlayer
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
@@ -98,7 +97,6 @@ class PlayerActivity : AppCompatActivity() {
         playerView.setControllerAutoShow(false)
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
 
-        ambientPlayer = AmbientSoundPlayer(this)
         soundPanel = SoundPanelController(findViewById(R.id.player_root)) {
             applyAudioPrefs()
         }
@@ -119,7 +117,6 @@ class PlayerActivity : AppCompatActivity() {
                         return
                     }
                     releasePlayer()
-                    ambientPlayer.release()
                     finish()
                 }
             },
@@ -188,7 +185,6 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        ambientPlayer.setPlaying(false)
         releasePlayer()
         super.onStop()
     }
@@ -201,16 +197,9 @@ class PlayerActivity : AppCompatActivity() {
         applyAudioPrefs()
     }
 
-    override fun onDestroy() {
-        ambientPlayer.release()
-        super.onDestroy()
-    }
-
     private fun applyAudioPrefs() {
-        if (::ambientPlayer.isInitialized) {
-            ambientPlayer.setPlaying(true)
-            ambientPlayer.sync()
-        }
+        // Process-scoped: keeps looping while browse or player is foreground.
+        AmbientSoundController.sync(this)
         val muted = AudioPrefsStore.isFireplaceMuted(this)
         player?.volume = if (muted) 0f else 1f
     }
