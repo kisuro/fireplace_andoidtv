@@ -39,6 +39,37 @@ object CatalogPrefsStore {
         setOrder(context, order)
     }
 
+    /**
+     * Rewrite catalog order so the visible browse subsequence matches [browseIds]
+     * (left-to-right strip order). Ids not in the browse list keep their relative
+     * positions around that subsequence (hidden / filtered-out rows).
+     */
+    fun applyBrowseOrder(context: Context, browseIds: List<String>) {
+        val catalogIds = VideoCatalog.videos.map { it.id }
+        val known = catalogIds.toSet()
+        val browse = browseIds.filter { it in known }
+        if (browse.isEmpty()) return
+        val browseSet = browse.toSet()
+        val previous = resolveOrder(context, catalogIds)
+        val result = ArrayList<String>(previous.size)
+        var spliced = false
+        for (id in previous) {
+            if (id in browseSet) {
+                if (!spliced) {
+                    result.addAll(browse)
+                    spliced = true
+                }
+            } else {
+                result.add(id)
+            }
+        }
+        if (!spliced) {
+            result.addAll(0, browse)
+        }
+        val missing = catalogIds.filter { it !in result.toSet() }
+        setOrder(context, result + missing)
+    }
+
     fun getFavoriteIds(context: Context): Set<String> {
         return readList(context, KEY_FAVORITES).toSet()
     }

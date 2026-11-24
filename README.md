@@ -4,14 +4,14 @@ Sideloadable **Android TV / Google TV (Leanback)** ambient fireplace player.
 
 - **Package:** `com.kisuro.fireplace.tv`
 - **App label:** Fireplace
-- **Current version:** `1.0.28` (versionCode 28)
+- **Current version:** `1.0.33` (versionCode 33)
 - **Playback:** Media3 ExoPlayer (no YouTube chrome / ads)
 - **Extraction:** NewPipe Extractor (live + VOD)
 
 ## Features
 
 - D-pad carousel of fireplaces (live + looping VOD; VOD start offsets skip intro text)
-- Reorder (long-press move mode), favorites toggle, favorites-only filter (all persisted)
+- Favorites/reorder: OK opens card menu (Play / ♥ / Move); long-press ♥; All | Favorites filter; ambient volume slider
 - Fullscreen audio+video loop; LEFT/RIGHT switch fireplaces in place; Back returns to picker
 - **Ambient nature layer** (Rain, Forest, Thunderstorm, Stream, Wind, Birds): off by default; pick while watching (Up) or from browse (Sound chip); independent of YouTube crackle mute
 - Live: HLS/DASH, URL refresh, AVC/HEVC preferred (MediaTek VP9 demoted)

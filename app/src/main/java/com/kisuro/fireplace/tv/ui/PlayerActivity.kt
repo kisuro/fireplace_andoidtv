@@ -8,6 +8,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -30,6 +31,7 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.PlayerView
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.AudioPrefsStore
+import com.kisuro.fireplace.tv.data.CatalogPrefsStore
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 import com.kisuro.fireplace.tv.data.LastPlayedStore
 import com.kisuro.fireplace.tv.data.VideoCatalog
@@ -37,7 +39,7 @@ import com.kisuro.fireplace.tv.extract.OkHttpDownloader
 import com.kisuro.fireplace.tv.extract.PlaybackSource
 import com.kisuro.fireplace.tv.extract.ResolvedStream
 import com.kisuro.fireplace.tv.extract.YoutubeStreamResolver
-import com.kisuro.fireplace.tv.playback.AmbientSoundPlayer
+import com.kisuro.fireplace.tv.playback.AmbientSoundController
 import com.kisuro.fireplace.tv.playback.FireplacePlayerFactory
 import com.kisuro.fireplace.tv.playback.FireplaceQualityPicker
 import com.kisuro.fireplace.tv.playback.Vp9Policy
@@ -60,7 +62,6 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var statusHint: TextView
     private lateinit var soundHint: TextView
     private lateinit var soundPanel: SoundPanelController
-    private lateinit var ambientPlayer: AmbientSoundPlayer
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
@@ -98,7 +99,6 @@ class PlayerActivity : AppCompatActivity() {
         playerView.setControllerAutoShow(false)
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
 
-        ambientPlayer = AmbientSoundPlayer(this)
         soundPanel = SoundPanelController(findViewById(R.id.player_root)) {
             applyAudioPrefs()
         }
@@ -119,7 +119,6 @@ class PlayerActivity : AppCompatActivity() {
                         return
                     }
                     releasePlayer()
-                    ambientPlayer.release()
                     finish()
                 }
             },
@@ -137,8 +136,9 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /**
-     * In fullscreen playback, LEFT/RIGHT swap fireplaces; UP/MENU opens sound panel.
-     * BACK closes the panel first, then returns to the carousel.
+     * In fullscreen playback, LEFT/RIGHT swap fireplaces; UP/MENU opens sound panel;
+     * long-press OK toggles favorite (same as strip). BACK closes the panel first,
+     * then returns to the carousel.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (soundPanel.isVisible) {
@@ -162,6 +162,53 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (soundPanel.isVisible) return super.onKeyDown(keyCode, event)
+        if (isConfirmKey(keyCode)) {
+            if (event.repeatCount == 0) {
+                event.startTracking()
+            }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
+        if (soundPanel.isVisible) return super.onKeyLongPress(keyCode, event)
+        if (isConfirmKey(keyCode)) {
+            toggleFavoriteForCurrent()
+            return true
+        }
+        return super.onKeyLongPress(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (soundPanel.isVisible) return super.onKeyUp(keyCode, event)
+        if (isConfirmKey(keyCode)) {
+            // Short-press OK while watching is a no-op; long-press already handled.
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
+    private fun isConfirmKey(keyCode: Int): Boolean {
+        return keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+            keyCode == KeyEvent.KEYCODE_ENTER ||
+            keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+            keyCode == KeyEvent.KEYCODE_BUTTON_A
+    }
+
+    private fun toggleFavoriteForCurrent() {
+        val current = video ?: return
+        val favored = CatalogPrefsStore.toggleFavorite(this, current.id)
+        Toast.makeText(
+            this,
+            if (favored) R.string.favorite_added else R.string.favorite_removed,
+            Toast.LENGTH_SHORT,
+        ).show()
+        Log.i(TAG, "favorite toggle id=${current.id} favored=$favored")
     }
 
     private fun switchCatalogVideo(delta: Int) {
@@ -188,7 +235,6 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        ambientPlayer.setPlaying(false)
         releasePlayer()
         super.onStop()
     }
@@ -201,16 +247,9 @@ class PlayerActivity : AppCompatActivity() {
         applyAudioPrefs()
     }
 
-    override fun onDestroy() {
-        ambientPlayer.release()
-        super.onDestroy()
-    }
-
     private fun applyAudioPrefs() {
-        if (::ambientPlayer.isInitialized) {
-            ambientPlayer.setPlaying(true)
-            ambientPlayer.sync()
-        }
+        // Process-scoped: keeps looping while browse or player is foreground.
+        AmbientSoundController.sync(this)
         val muted = AudioPrefsStore.isFireplaceMuted(this)
         player?.volume = if (muted) 0f else 1f
     }

@@ -15,7 +15,7 @@ import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 /**
  * Thumb-only carousel cards under the hero (no title/meta under the strip).
- * Labels for the selection stay on the hero card. Star badge marks favorites.
+ * Labels for the selection stay on the hero card. Heart badge marks favorites.
  */
 class VideoCardPresenter : Presenter() {
 

@@ -30,4 +30,23 @@
         <item name="android:textColor">@color/fireplace_text</item>
         <item name="android:textSize">15sp</item>
     </style>
+
+    <!-- Segment inside the All | Favorites track; selected = filled ember. -->
+    <style name="FilterSegment">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/filter_segment_bg</item>
+        <item name="android:focusable">true</item>
+        <item name="android:focusableInTouchMode">true</item>
+        <item name="android:clickable">true</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:textColor">@color/fireplace_text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:minWidth">72dp</item>
+        <item name="android:gravity">center</item>
+    </style>
 </resources>
