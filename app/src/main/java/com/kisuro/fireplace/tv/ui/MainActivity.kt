@@ -49,9 +49,9 @@ import kotlin.math.roundToInt
  * Sound chip opens ambient / fireplace-crackle prefs (ambient off by default).
  *
  * Favorites / filter / reorder:
- * - Filter chip toggles favorites-only (persisted).
- * - Fav chip toggles favorite for the focused strip card.
- * - Long-press enters move mode: Left/Right swap, OK commits, Back cancels.
+ * - Long-press OK on a strip card toggles favorite (heart badge).
+ * - Segmented All | Favorites filter (persisted); clear selected state on active side.
+ * - Move chip enters reorder mode: Left/Right swap, OK commits, Back cancels.
  */
 @UnstableApi
 class MainActivity : FragmentActivity() {
@@ -67,8 +67,9 @@ class MainActivity : FragmentActivity() {
     private lateinit var heroMeta: TextView
     private lateinit var heroPreview: HeroPreviewController
     private lateinit var browseSubtitle: TextView
-    private lateinit var filterChip: TextView
-    private lateinit var favoriteChip: TextView
+    private lateinit var filterAll: TextView
+    private lateinit var filterFavorites: TextView
+    private lateinit var moveChip: TextView
     private lateinit var soundOpenButton: TextView
     private lateinit var ambientStatus: TextView
     private lateinit var emptyFavorites: LinearLayout
@@ -103,8 +104,9 @@ class MainActivity : FragmentActivity() {
         applyHorizontalInset(findViewById(R.id.ambient_status), safeInset)
 
         browseSubtitle = findViewById(R.id.browse_subtitle)
-        filterChip = findViewById(R.id.filter_chip)
-        favoriteChip = findViewById(R.id.favorite_chip)
+        filterAll = findViewById(R.id.filter_all)
+        filterFavorites = findViewById(R.id.filter_favorites)
+        moveChip = findViewById(R.id.move_chip)
         soundOpenButton = findViewById(R.id.sound_open_button)
         ambientStatus = findViewById(R.id.ambient_status)
         emptyFavorites = findViewById(R.id.empty_favorites)
@@ -114,14 +116,15 @@ class MainActivity : FragmentActivity() {
             applyAudioPrefs()
         }
         soundOpenButton.setOnClickListener { soundPanel.show() }
-        filterChip.setOnClickListener { toggleFavoritesFilter() }
-        favoriteChip.setOnClickListener { toggleFavoriteForCurrent() }
+        filterAll.setOnClickListener { setFavoritesFilter(false) }
+        filterFavorites.setOnClickListener { setFavoritesFilter(true) }
+        moveChip.setOnClickListener { onMoveChipClicked() }
         emptyShowAllChip.setOnClickListener {
             CatalogPrefsStore.setFavoritesOnly(this, false)
             reloadCarousel(preferId = currentVideo?.id)
         }
 
-        wireChipFocus(filterChip, favoriteChip, soundOpenButton)
+        wireChipFocus(filterAll, filterFavorites, moveChip, soundOpenButton)
 
         heroContainer = findViewById(R.id.hero_container)
         heroContainer.minimumHeight = resources.getDimensionPixelSize(R.dimen.hero_min_height)
@@ -199,7 +202,7 @@ class MainActivity : FragmentActivity() {
                     }
                     viewHolder.itemView.setOnLongClickListener {
                         if (isMoveMode) return@setOnLongClickListener true
-                        enterMoveMode()
+                        toggleFavoriteForCurrent()
                         true
                     }
                     viewHolder.itemView.setOnFocusChangeListener { v, hasFocus ->
@@ -209,9 +212,6 @@ class MainActivity : FragmentActivity() {
                         }
                         val scaleY = if (hasFocus) CAROUSEL_FOCUS_SCALE_Y else 1f
                         v.animate().scaleX(1f).scaleY(scaleY).setDuration(120).start()
-                        if (hasFocus) {
-                            updateFavoriteChip()
-                        }
                     }
                 }
             },
@@ -229,7 +229,6 @@ class MainActivity : FragmentActivity() {
                     if (suppressHeroSync) return
                     val video = objectAdapter.get(position) as? FireplaceVideo ?: return
                     bindHero(video)
-                    updateFavoriteChip()
                 }
             },
         )
@@ -245,8 +244,11 @@ class MainActivity : FragmentActivity() {
                     if (isMoveMode) reorderSelection(-1) else moveSelection(-1)
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (isMoveMode) return@setOnKeyListener true
-                    filterChip.requestFocus()
+                    if (isMoveMode) {
+                        moveChip.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                    focusActiveFilterSegment()
                     true
                 }
                 KeyEvent.KEYCODE_MENU -> {
@@ -411,10 +413,13 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun toggleFavoritesFilter() {
+    private fun setFavoritesFilter(favoritesOnly: Boolean) {
         if (isMoveMode) exitMoveMode(commit = true)
-        val next = !CatalogPrefsStore.isFavoritesOnly(this)
-        CatalogPrefsStore.setFavoritesOnly(this, next)
+        if (CatalogPrefsStore.isFavoritesOnly(this) == favoritesOnly) {
+            updateChrome()
+            return
+        }
+        CatalogPrefsStore.setFavoritesOnly(this, favoritesOnly)
         reloadCarousel(preferId = currentVideo?.id)
     }
 
@@ -433,6 +438,17 @@ class MainActivity : FragmentActivity() {
             objectAdapter.notifyItemRangeChanged(0, objectAdapter.size())
             updateChrome()
         }
+    }
+
+    private fun onMoveChipClicked() {
+        if (isMoveMode) {
+            exitMoveMode(commit = true)
+            return
+        }
+        enterMoveMode()
+        carousel.requestFocus()
+        val pos = carousel.selectedPosition.coerceAtLeast(0)
+        carousel.findViewHolderForAdapterPosition(pos)?.itemView?.requestFocus()
     }
 
     private fun enterMoveMode() {
@@ -520,42 +536,37 @@ class MainActivity : FragmentActivity() {
 
     private fun updateChrome() {
         val favoritesOnly = CatalogPrefsStore.isFavoritesOnly(this)
-        filterChip.text = if (favoritesOnly) {
-            getString(R.string.chip_filter_favorites)
-        } else {
-            getString(R.string.chip_filter_all)
-        }
-        filterChip.isSelected = favoritesOnly
+        filterAll.isSelected = !favoritesOnly
+        filterFavorites.isSelected = favoritesOnly
         browseSubtitle.text = if (isMoveMode) {
             getString(R.string.browse_move_hint)
         } else {
             getString(R.string.browse_hint_actions)
         }
-        updateFavoriteChip()
-        val chipsEnabled = !isMoveMode
-        filterChip.isEnabled = chipsEnabled
-        favoriteChip.isEnabled = chipsEnabled
-        soundOpenButton.isEnabled = chipsEnabled
-        filterChip.isFocusable = chipsEnabled
-        favoriteChip.isFocusable = chipsEnabled
-        soundOpenButton.isFocusable = chipsEnabled
+        moveChip.text = if (isMoveMode) {
+            getString(R.string.chip_move_done)
+        } else {
+            getString(R.string.chip_move)
+        }
+        moveChip.isSelected = isMoveMode
+        // Filter + Sound stay off during move; Move chip stays usable as Done.
+        val filterEnabled = !isMoveMode
+        filterAll.isEnabled = filterEnabled
+        filterFavorites.isEnabled = filterEnabled
+        soundOpenButton.isEnabled = filterEnabled
+        filterAll.isFocusable = filterEnabled
+        filterFavorites.isFocusable = filterEnabled
+        soundOpenButton.isFocusable = filterEnabled
+        moveChip.isEnabled = true
+        moveChip.isFocusable = true
     }
 
-    private fun updateFavoriteChip() {
-        if (!::favoriteChip.isInitialized) return
-        val video = currentVideo
-        if (video == null) {
-            favoriteChip.text = getString(R.string.chip_favorite_add)
-            favoriteChip.isSelected = false
-            return
-        }
-        val favored = CatalogPrefsStore.isFavorite(this, video.id)
-        favoriteChip.text = if (favored) {
-            getString(R.string.chip_favorite_on)
+    private fun focusActiveFilterSegment() {
+        if (CatalogPrefsStore.isFavoritesOnly(this)) {
+            filterFavorites.requestFocus()
         } else {
-            getString(R.string.chip_favorite_add)
+            filterAll.requestFocus()
         }
-        favoriteChip.isSelected = favored
     }
 
     private fun wireChipFocus(vararg chips: TextView) {
@@ -624,7 +635,6 @@ class MainActivity : FragmentActivity() {
         if (::heroPreview.isInitialized) {
             heroPreview.preview(video)
         }
-        updateFavoriteChip()
     }
 
     private fun moveSelection(delta: Int): Boolean {

@@ -47,24 +47,46 @@
                 android:textColor="@color/fireplace_text_dim"
                 android:textSize="16sp" />
 
-            <TextView
-                android:id="@+id/filter_chip"
-                style="@style/SoundChip"
+            <!-- Segmented All | Favorites — selected segment stays filled. -->
+            <LinearLayout
+                android:id="@+id/filter_segment"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
-                android:text="@string/chip_filter_all"
-                android:nextFocusDown="@id/video_carousel" />
+                android:background="@drawable/filter_segment_track"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/filter_all"
+                    style="@style/FilterSegment"
+                    android:text="@string/chip_filter_all"
+                    android:nextFocusRight="@id/filter_favorites"
+                    android:nextFocusDown="@id/video_carousel" />
+
+                <TextView
+                    android:id="@+id/filter_favorites"
+                    style="@style/FilterSegment"
+                    android:text="@string/chip_filter_favorites"
+                    android:nextFocusLeft="@id/filter_all"
+                    android:nextFocusRight="@id/move_chip"
+                    android:nextFocusDown="@id/video_carousel" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/favorite_chip"
+                android:id="@+id/move_chip"
                 style="@style/SoundChip"
                 android:layout_marginEnd="8dp"
-                android:text="@string/chip_favorite_add"
+                android:text="@string/chip_move"
+                android:nextFocusLeft="@id/filter_favorites"
+                android:nextFocusRight="@id/sound_open_button"
                 android:nextFocusDown="@id/video_carousel" />
 
             <TextView
                 android:id="@+id/sound_open_button"
                 style="@style/SoundChip"
                 android:text="@string/sound_open"
+                android:nextFocusLeft="@id/move_chip"
                 android:nextFocusDown="@id/video_carousel" />
         </LinearLayout>
 
