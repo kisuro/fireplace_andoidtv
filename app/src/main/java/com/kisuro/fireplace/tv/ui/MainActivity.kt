@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.FragmentActivity
 import androidx.leanback.widget.ArrayObjectAdapter
+import androidx.leanback.widget.BaseGridView
 import androidx.leanback.widget.HorizontalGridView
 import androidx.leanback.widget.ItemBridgeAdapter
 import androidx.leanback.widget.OnChildViewHolderSelectedListener
@@ -51,7 +52,8 @@ import kotlin.math.roundToInt
  * Favorites / filter / reorder:
  * - Short OK opens card menu: Play, Add/Remove ♥, Move, Cancel.
  * - Long-press OK quick-toggles favorite (heart badge).
- * - Move mode: Left/Right walks the card to a new index; OK drops; Back cancels.
+ * - Move mode: Left/Right walks the card to a new index (key-intercepted so Leanback
+ *   cannot steal DPAD); OK drops; Back cancels.
  * - Segmented All | Favorites filter (persisted).
  */
 @UnstableApi
@@ -245,42 +247,65 @@ class MainActivity : FragmentActivity() {
             },
         )
 
-        // DPAD stays on the strip — UP moves to chips (not the hero).
-        carousel.setOnKeyListener { _, keyCode, event ->
-            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (isMoveMode) reorderSelection(+1) else moveSelection(+1)
-                }
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    if (isMoveMode) reorderSelection(-1) else moveSelection(-1)
-                }
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (isMoveMode || cardMenu.isVisible) return@setOnKeyListener true
-                    focusActiveFilterSegment()
-                    true
-                }
-                KeyEvent.KEYCODE_MENU -> {
-                    if (isMoveMode || cardMenu.isVisible) return@setOnKeyListener true
-                    soundPanel.toggle()
-                    true
-                }
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
-                    when {
-                        cardMenu.isVisible -> {
-                            cardMenu.hide()
-                            true
+        // Intercept keys BEFORE the focused card / Leanback selection consumes them.
+        // setOnKeyListener on the grid never sees DPAD while a child holds focus — that
+        // made Move mode appear broken (selection moved without swapping the card).
+        carousel.setOnKeyInterceptListener(
+            BaseGridView.OnKeyInterceptListener { event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@OnKeyInterceptListener false
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        when {
+                            cardMenu.isVisible -> true
+                            isMoveMode -> reorderSelection(+1)
+                            else -> false
                         }
-                        isMoveMode -> {
-                            exitMoveMode(commit = false)
-                            true
-                        }
-                        else -> false
                     }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        when {
+                            cardMenu.isVisible -> true
+                            isMoveMode -> reorderSelection(-1)
+                            else -> false
+                        }
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (isMoveMode || cardMenu.isVisible) return@OnKeyInterceptListener true
+                        focusActiveFilterSegment()
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_CENTER,
+                    KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_NUMPAD_ENTER,
+                    KeyEvent.KEYCODE_BUTTON_A,
+                    -> {
+                        if (!isMoveMode) return@OnKeyInterceptListener false
+                        if (event.repeatCount == 0) {
+                            exitMoveMode(commit = true)
+                        }
+                        true
+                    }
+                    KeyEvent.KEYCODE_MENU -> {
+                        if (isMoveMode || cardMenu.isVisible) return@OnKeyInterceptListener true
+                        soundPanel.toggle()
+                        true
+                    }
+                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                        when {
+                            cardMenu.isVisible -> {
+                                cardMenu.hide()
+                                true
+                            }
+                            isMoveMode -> {
+                                exitMoveMode(commit = false)
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                    else -> false
                 }
-                else -> false
-            }
-        }
+            },
+        )
 
         reloadCarousel(preferId = LastPlayedStore.getVideoId(this))
 
@@ -451,14 +476,22 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun enterMoveModeFor(video: FireplaceVideo) {
-        if (objectAdapter.size() < 2) return
+        if (objectAdapter.size() < 2) {
+            Toast.makeText(this, R.string.card_menu_move, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (cardMenu.isVisible) cardMenu.hide()
         bindHero(video)
         movingVideoId = video.id
         moveOrderSnapshot = CatalogPrefsStore.resolveOrder(this, VideoCatalog.videos.map { it.id })
         updateChrome()
         val index = indexOfVideo(video.id).coerceAtLeast(0)
-        settleOnIndex(index, smooth = false)
-        Log.i(TAG, "move mode enter focus=${video.id}")
+        // Post so focus lands after the menu overlay is gone.
+        carousel.post {
+            settleOnIndex(index, smooth = false)
+            Toast.makeText(this, R.string.browse_move_hint, Toast.LENGTH_SHORT).show()
+        }
+        Log.i(TAG, "move mode enter focus=${video.id} index=$index")
     }
 
     private fun exitMoveMode(commit: Boolean) {
@@ -472,11 +505,17 @@ class MainActivity : FragmentActivity() {
             Log.i(TAG, "move mode cancel")
             return
         }
+        // Belt-and-suspenders: rewrite prefs from the live adapter order.
+        persistAdapterBrowseOrder()
         moveOrderSnapshot = null
         movingVideoId = null
         updateChrome()
         focusCurrentCard()
-        Log.i(TAG, "move mode commit prefer=$preferId pos=${carousel.selectedPosition}")
+        Log.i(
+            TAG,
+            "move mode commit prefer=$preferId pos=${carousel.selectedPosition} " +
+                "order=${CatalogPrefsStore.resolveOrder(this, VideoCatalog.videos.map { it.id })}",
+        )
     }
 
     /**
@@ -486,24 +525,39 @@ class MainActivity : FragmentActivity() {
     private fun reorderSelection(delta: Int): Boolean {
         val last = objectAdapter.size() - 1
         if (last < 1) return true
-        val current = carousel.selectedPosition.coerceAtLeast(0)
+        val movingId = movingVideoId
+        val current = if (movingId != null) {
+            indexOfVideo(movingId).takeIf { it >= 0 } ?: carousel.selectedPosition.coerceAtLeast(0)
+        } else {
+            carousel.selectedPosition.coerceAtLeast(0)
+        }
         val target = (current + delta).coerceIn(0, last)
         if (target == current) return true
         val a = objectAdapter.get(current) as? FireplaceVideo ?: return true
         val b = objectAdapter.get(target) as? FireplaceVideo ?: return true
-        val movingId = movingVideoId ?: a.id
-        if (a.id != movingId) {
-            // Focus drifted; snap back onto the moving card.
-            val movingIndex = indexOfVideo(movingId)
-            if (movingIndex >= 0) settleOnIndex(movingIndex, smooth = false)
+        if (movingId != null && a.id != movingId) {
+            settleOnIndex(current, smooth = false)
             return true
         }
-        CatalogPrefsStore.swapInOrder(this, a.id, b.id)
+        // Swap adapter slots first so the UI shows the card traveling with focus.
         objectAdapter.replace(current, b)
         objectAdapter.replace(target, a)
+        CatalogPrefsStore.swapInOrder(this, a.id, b.id)
+        persistAdapterBrowseOrder()
+        movingVideoId = a.id
         settleOnIndex(target, smooth = true)
         Log.i(TAG, "reorder walk ${a.id} $current->$target (swap ${b.id})")
         return true
+    }
+
+    /** Persist visible strip order into catalog prefs (keeps non-visible ids in place). */
+    private fun persistAdapterBrowseOrder() {
+        val browseIds = ArrayList<String>(objectAdapter.size())
+        for (i in 0 until objectAdapter.size()) {
+            val video = objectAdapter.get(i) as? FireplaceVideo ?: continue
+            browseIds.add(video.id)
+        }
+        CatalogPrefsStore.applyBrowseOrder(this, browseIds)
     }
 
     private fun reloadCarousel(preferId: String?) {
@@ -649,16 +703,6 @@ class MainActivity : FragmentActivity() {
         if (::heroPreview.isInitialized) {
             heroPreview.preview(video)
         }
-    }
-
-    private fun moveSelection(delta: Int): Boolean {
-        val last = objectAdapter.size() - 1
-        if (last < 0) return false
-        val current = carousel.selectedPosition.coerceAtLeast(0)
-        val target = (current + delta).coerceIn(0, last)
-        if (target == current) return true
-        settleOnIndex(target, smooth = true)
-        return true
     }
 
     private fun settleOnIndex(index: Int, smooth: Boolean) {
