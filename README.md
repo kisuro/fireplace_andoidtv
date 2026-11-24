@@ -4,7 +4,7 @@ Sideloadable **Android TV / Google TV (Leanback)** ambient fireplace player.
 
 - **Package:** `com.kisuro.fireplace.tv`
 - **App label:** Fireplace
-- **Current version:** `1.0.30` (versionCode 30)
+- **Current version:** `1.0.31` (versionCode 31)
 - **Playback:** Media3 ExoPlayer (no YouTube chrome / ads)
 - **Extraction:** NewPipe Extractor (live + VOD)
 
