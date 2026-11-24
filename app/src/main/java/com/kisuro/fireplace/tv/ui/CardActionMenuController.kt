@@ -8,18 +8,18 @@ import com.kisuro.fireplace.tv.data.CatalogPrefsStore
 import com.kisuro.fireplace.tv.data.FireplaceVideo
 
 /**
- * Small D-pad menu opened by short OK on a strip card:
- * Play, Add/Remove favorite, Move, Cancel.
+ * D-pad card menu opened by long-press OK.
+ *
+ * Browse: Add/Remove favorite, Move, Cancel.
+ * Player (no [onMove]): Add/Remove favorite, Cancel.
  */
 class CardActionMenuController(
     private val host: ViewGroup,
-    private val onPlay: (FireplaceVideo) -> Unit,
     private val onToggleFavorite: (FireplaceVideo) -> Unit,
-    private val onMove: (FireplaceVideo) -> Unit,
+    private val onMove: ((FireplaceVideo) -> Unit)? = null,
 ) {
     private val root: View = View.inflate(host.context, R.layout.overlay_card_menu, null)
     private val title: TextView = root.findViewById(R.id.card_menu_title)
-    private val playChip: TextView = root.findViewById(R.id.card_menu_play)
     private val favoriteChip: TextView = root.findViewById(R.id.card_menu_favorite)
     private val moveChip: TextView = root.findViewById(R.id.card_menu_move)
     private val cancelChip: TextView = root.findViewById(R.id.card_menu_cancel)
@@ -39,30 +39,16 @@ class CardActionMenuController(
         )
         root.visibility = View.GONE
 
-        playChip.nextFocusUpId = R.id.card_menu_cancel
-        playChip.nextFocusDownId = R.id.card_menu_favorite
-        favoriteChip.nextFocusUpId = R.id.card_menu_play
-        favoriteChip.nextFocusDownId = R.id.card_menu_move
-        moveChip.nextFocusUpId = R.id.card_menu_favorite
-        moveChip.nextFocusDownId = R.id.card_menu_cancel
-        cancelChip.nextFocusUpId = R.id.card_menu_move
-        cancelChip.nextFocusDownId = R.id.card_menu_play
-
-        playChip.setOnClickListener {
-            val v = video ?: return@setOnClickListener
-            hide()
-            onPlay(v)
-        }
         favoriteChip.setOnClickListener {
             val v = video ?: return@setOnClickListener
             onToggleFavorite(v)
             refreshFavoriteLabel(v)
         }
         moveChip.setOnClickListener {
-            if (!moveChip.isEnabled) return@setOnClickListener
+            if (!moveChip.isEnabled || moveChip.visibility != View.VISIBLE) return@setOnClickListener
             val v = video ?: return@setOnClickListener
             hide()
-            onMove(v)
+            onMove?.invoke(v)
         }
         cancelChip.setOnClickListener { hide() }
         root.setOnClickListener { hide() }
@@ -72,16 +58,39 @@ class CardActionMenuController(
         video = target
         title.text = target.title
         refreshFavoriteLabel(target)
-        moveChip.isEnabled = canMove
-        moveChip.alpha = if (canMove) 1f else 0.4f
+
+        val moveAvailable = onMove != null && canMove
+        val showMoveRow = onMove != null
+        moveChip.visibility = if (showMoveRow) View.VISIBLE else View.GONE
+        moveChip.isEnabled = moveAvailable
+        moveChip.alpha = if (moveAvailable) 1f else 0.4f
+
+        wireFocusChain(showMove = showMoveRow)
+
         root.visibility = View.VISIBLE
         root.bringToFront()
-        playChip.post { playChip.requestFocus() }
+        favoriteChip.post { favoriteChip.requestFocus() }
     }
 
     fun hide() {
         root.visibility = View.GONE
         video = null
+    }
+
+    private fun wireFocusChain(showMove: Boolean) {
+        if (showMove) {
+            favoriteChip.nextFocusUpId = R.id.card_menu_cancel
+            favoriteChip.nextFocusDownId = R.id.card_menu_move
+            moveChip.nextFocusUpId = R.id.card_menu_favorite
+            moveChip.nextFocusDownId = R.id.card_menu_cancel
+            cancelChip.nextFocusUpId = R.id.card_menu_move
+            cancelChip.nextFocusDownId = R.id.card_menu_favorite
+        } else {
+            favoriteChip.nextFocusUpId = R.id.card_menu_cancel
+            favoriteChip.nextFocusDownId = R.id.card_menu_cancel
+            cancelChip.nextFocusUpId = R.id.card_menu_favorite
+            cancelChip.nextFocusDownId = R.id.card_menu_favorite
+        }
     }
 
     private fun refreshFavoriteLabel(target: FireplaceVideo) {

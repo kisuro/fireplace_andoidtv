@@ -11,7 +11,7 @@ Sideloadable **Android TV / Google TV (Leanback)** ambient fireplace player.
 ## Features
 
 - D-pad carousel of fireplaces (live + looping VOD; VOD start offsets skip intro text)
-- Favorites/reorder: OK opens card menu (Play / ♥ / Move); long-press ♥; All | Favorites filter; ambient volume slider
+- Favorites/reorder: short OK plays; long-press opens card menu (♥ / Move); All | Favorites filter; ambient volume slider
 - Fullscreen audio+video loop; LEFT/RIGHT switch fireplaces in place; Back returns to picker
 - **Ambient nature layer** (Rain, Forest, Thunderstorm, Stream, Wind, Birds): off by default; pick while watching (Up) or from browse (Sound chip); independent of YouTube crackle mute
 - Live: HLS/DASH, URL refresh, AVC/HEVC preferred (MediaTek VP9 demoted)

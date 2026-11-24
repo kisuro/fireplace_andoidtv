@@ -50,8 +50,8 @@ import kotlin.math.roundToInt
  * Sound chip opens ambient / fireplace-crackle prefs (ambient off by default).
  *
  * Favorites / filter / reorder:
- * - Short OK opens card menu: Play, Add/Remove ♥, Move, Cancel.
- * - Long-press OK quick-toggles favorite (heart badge).
+ * - Short OK plays the focused fireplace fullscreen.
+ * - Long-press OK opens card menu: Add/Remove ♥, Move, Cancel.
  * - Move mode: Left/Right walks the card to a new index (key-intercepted so Leanback
  *   cannot steal DPAD); OK drops; Back cancels.
  * - Segmented All | Favorites filter (persisted).
@@ -120,7 +120,6 @@ class MainActivity : FragmentActivity() {
         }
         cardMenu = CardActionMenuController(
             host = findViewById(R.id.main_root),
-            onPlay = { openPlayer(it) },
             onToggleFavorite = { toggleFavoriteForVideo(it) },
             onMove = { enterMoveModeFor(it) },
         )
@@ -207,12 +206,14 @@ class MainActivity : FragmentActivity() {
                         }
                         if (cardMenu.isVisible || soundPanel.isVisible) return@setOnClickListener
                         bindHero(video)
-                        cardMenu.show(video, canMove = objectAdapter.size() >= 2)
+                        openPlayer(video)
                     }
                     viewHolder.itemView.setOnLongClickListener {
-                        if (isMoveMode || cardMenu.isVisible) return@setOnLongClickListener true
+                        if (isMoveMode || cardMenu.isVisible || soundPanel.isVisible) {
+                            return@setOnLongClickListener true
+                        }
                         bindHero(video)
-                        toggleFavoriteForVideo(video)
+                        cardMenu.show(video, canMove = objectAdapter.size() >= 2)
                         true
                     }
                     viewHolder.itemView.setOnFocusChangeListener { v, hasFocus ->

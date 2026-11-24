@@ -3,15 +3,14 @@
     <string name="app_name">Fireplace</string>
     <string name="browse_title">Fireplace</string>
     <string name="browse_subtitle">Choose a fire</string>
-    <string name="browse_hint_actions">OK menu · Long-press ♥ · Filter</string>
+    <string name="browse_hint_actions">OK play · Long-press menu · Filter</string>
     <string name="browse_move_hint">Moving — Left/Right place card · OK drop · Back cancel</string>
     <string name="browse_empty_favorites">No favorites yet</string>
-    <string name="browse_empty_favorites_hint">Long-press OK on a fire for ♥, or show all again.</string>
+    <string name="browse_empty_favorites_hint">Long-press OK → Add ♥, or show all again.</string>
     <string name="chip_filter_all">All</string>
     <string name="chip_filter_favorites">Favorites</string>
     <string name="chip_show_all">Show all</string>
     <string name="card_menu_hint">Up/Down · OK choose · Back close</string>
-    <string name="card_menu_play">Play</string>
     <string name="card_menu_favorite_add">Add ♥ favorite</string>
     <string name="card_menu_favorite_remove">Remove ♥ favorite</string>
     <string name="card_menu_move">Move</string>
@@ -40,7 +39,7 @@
     <string name="sound_open">Sound</string>
     <string name="sound_status_off">Ambient off</string>
     <string name="sound_status_on">Ambient · %1$s</string>
-    <string name="player_sound_hint">Press Up for sound · Long-press OK for ♥</string>
+    <string name="player_sound_hint">Press Up for sound · Long-press OK for ♥ menu</string>
 
     <string name="ambient_rain">Rain</string>
     <string name="ambient_forest">Forest</string>
