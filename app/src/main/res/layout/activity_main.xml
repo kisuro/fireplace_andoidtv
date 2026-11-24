@@ -69,24 +69,15 @@
                     style="@style/FilterSegment"
                     android:text="@string/chip_filter_favorites"
                     android:nextFocusLeft="@id/filter_all"
-                    android:nextFocusRight="@id/move_chip"
+                    android:nextFocusRight="@id/sound_open_button"
                     android:nextFocusDown="@id/video_carousel" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/move_chip"
-                style="@style/SoundChip"
-                android:layout_marginEnd="8dp"
-                android:text="@string/chip_move"
-                android:nextFocusLeft="@id/filter_favorites"
-                android:nextFocusRight="@id/sound_open_button"
-                android:nextFocusDown="@id/video_carousel" />
 
             <TextView
                 android:id="@+id/sound_open_button"
                 style="@style/SoundChip"
                 android:text="@string/sound_open"
-                android:nextFocusLeft="@id/move_chip"
+                android:nextFocusLeft="@id/filter_favorites"
                 android:nextFocusDown="@id/video_carousel" />
         </LinearLayout>
 

@@ -1,16 +1,19 @@
 package com.kisuro.fireplace.tv.ui
 
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import com.kisuro.fireplace.tv.R
 import com.kisuro.fireplace.tv.data.AmbientSound
 import com.kisuro.fireplace.tv.data.AudioPrefsStore
 
 /**
- * Leanback-friendly sound overlay: fireplace crackle mute + ambient pick + volume.
+ * Leanback-friendly sound overlay: fireplace crackle mute + ambient pick + volume slider.
  * Ambient stays off until the user enables a nature sound (not the Off chip).
+ * Volume: focus the SeekBar and use Left/Right (persisted 0–100%).
  */
 class SoundPanelController(
     private val host: ViewGroup,
@@ -20,15 +23,15 @@ class SoundPanelController(
     private val crackleOn: TextView = root.findViewById(R.id.sound_crackle_on)
     private val crackleOff: TextView = root.findViewById(R.id.sound_crackle_off)
     private val ambientRow: LinearLayout = root.findViewById(R.id.sound_ambient_row)
-    private val volumeSoft: TextView = root.findViewById(R.id.sound_volume_soft)
-    private val volumeMedium: TextView = root.findViewById(R.id.sound_volume_medium)
-    private val volumeLoud: TextView = root.findViewById(R.id.sound_volume_loud)
-    private val volumeLabel: TextView = root.findViewById(R.id.sound_volume_label)
-    private val volumeRow: View = root.findViewById(R.id.sound_volume_row)
+    private val volumeHeader: View = root.findViewById(R.id.sound_volume_header)
+    private val volumeSeek: SeekBar = root.findViewById(R.id.sound_volume_seek)
+    private val volumeValue: TextView = root.findViewById(R.id.sound_volume_value)
+    private val volumeHint: TextView = root.findViewById(R.id.sound_volume_hint)
 
     private val ambientChips = linkedMapOf<String, TextView>()
     private var ambientOffChip: TextView? = null
     private val chipGapPx = host.resources.getDimensionPixelSize(R.dimen.sound_chip_gap)
+    private var suppressSeekCallback: Boolean = false
 
     val isVisible: Boolean
         get() = root.visibility == View.VISIBLE
@@ -68,9 +71,41 @@ class SoundPanelController(
             }
         }
 
-        volumeSoft.setOnClickListener { setVolume(VOLUME_SOFT) }
-        volumeMedium.setOnClickListener { setVolume(VOLUME_MEDIUM) }
-        volumeLoud.setOnClickListener { setVolume(VOLUME_LOUD) }
+        volumeSeek.max = VOLUME_STEPS
+        volumeSeek.setOnSeekBarChangeListener(
+            object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    updateVolumeLabel(progress)
+                    if (suppressSeekCallback || !fromUser) return
+                    persistVolume(progress)
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    persistVolume(volumeSeek.progress)
+                }
+            },
+        )
+        volumeSeek.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (volumeSeek.progress > 0) {
+                        volumeSeek.progress = volumeSeek.progress - 1
+                        persistVolume(volumeSeek.progress)
+                    }
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (volumeSeek.progress < volumeSeek.max) {
+                        volumeSeek.progress = volumeSeek.progress + 1
+                        persistVolume(volumeSeek.progress)
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     fun show() {
@@ -93,10 +128,15 @@ class SoundPanelController(
         if (isVisible) hide() else show()
     }
 
-    private fun setVolume(volume: Float) {
+    private fun persistVolume(steps: Int) {
+        val volume = (steps.toFloat() / VOLUME_STEPS.toFloat()).coerceIn(0f, 1f)
         AudioPrefsStore.setAmbientVolume(host.context, volume)
-        refreshSelection()
         onChanged()
+    }
+
+    private fun updateVolumeLabel(steps: Int) {
+        val percent = ((steps.toFloat() / VOLUME_STEPS.toFloat()) * 100f).toInt()
+        volumeValue.text = host.context.getString(R.string.sound_volume_value, percent)
     }
 
     private fun addAmbientChip(label: String, key: String, onClick: () -> Unit): TextView {
@@ -131,19 +171,21 @@ class SoundPanelController(
         }
 
         val volume = AudioPrefsStore.getAmbientVolume(ctx)
-        volumeSoft.isSelected = volume <= 0.30f
-        volumeMedium.isSelected = volume > 0.30f && volume < 0.70f
-        volumeLoud.isSelected = volume >= 0.70f
+        val steps = (volume * VOLUME_STEPS).toInt().coerceIn(0, VOLUME_STEPS)
+        suppressSeekCallback = true
+        volumeSeek.progress = steps
+        suppressSeekCallback = false
+        updateVolumeLabel(steps)
 
         val volumeVisible = if (ambientEnabled) View.VISIBLE else View.GONE
-        volumeLabel.visibility = volumeVisible
-        volumeRow.visibility = volumeVisible
+        volumeHeader.visibility = volumeVisible
+        volumeSeek.visibility = volumeVisible
+        volumeHint.visibility = volumeVisible
     }
 
     companion object {
         private const val KEY_OFF = "off"
-        private const val VOLUME_SOFT = 0.25f
-        private const val VOLUME_MEDIUM = 0.45f
-        private const val VOLUME_LOUD = 0.75f
+        /** 20 steps → 5% per Left/Right press. */
+        private const val VOLUME_STEPS = 20
     }
 }
