@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -62,6 +63,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var statusHint: TextView
     private lateinit var soundHint: TextView
     private lateinit var soundPanel: SoundPanelController
+    private lateinit var cardMenu: CardActionMenuController
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
@@ -99,9 +101,14 @@ class PlayerActivity : AppCompatActivity() {
         playerView.setControllerAutoShow(false)
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
 
-        soundPanel = SoundPanelController(findViewById(R.id.player_root)) {
+        val playerRoot = findViewById<ViewGroup>(R.id.player_root)
+        soundPanel = SoundPanelController(playerRoot) {
             applyAudioPrefs()
         }
+        cardMenu = CardActionMenuController(
+            host = playerRoot,
+            onToggleFavorite = { toggleFavoriteForVideo(it) },
+        )
 
         val videoId = intent.getStringExtra(EXTRA_VIDEO_ID)
         video = videoId?.let { VideoCatalog.findById(it) }
@@ -114,12 +121,18 @@ class PlayerActivity : AppCompatActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (soundPanel.isVisible) {
-                        soundPanel.hide()
-                        return
+                    when {
+                        ::cardMenu.isInitialized && cardMenu.isVisible -> {
+                            cardMenu.hide()
+                        }
+                        soundPanel.isVisible -> {
+                            soundPanel.hide()
+                        }
+                        else -> {
+                            releasePlayer()
+                            finish()
+                        }
                     }
-                    releasePlayer()
-                    finish()
                 }
             },
         )
@@ -137,10 +150,14 @@ class PlayerActivity : AppCompatActivity() {
 
     /**
      * In fullscreen playback, LEFT/RIGHT swap fireplaces; UP/MENU opens sound panel;
-     * long-press OK toggles favorite (same as strip). BACK closes the panel first,
-     * then returns to the carousel.
+     * long-press OK opens a favorite-only menu (same ♥ action as browse). Short OK is
+     * a no-op. BACK closes menu/panel first, then returns to the carousel.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (::cardMenu.isInitialized && cardMenu.isVisible) {
+            // Let menu chips handle D-pad while the overlay is open.
+            return super.dispatchKeyEvent(event)
+        }
         if (soundPanel.isVisible) {
             // Let the overlay chips handle D-pad while the panel is open.
             return super.dispatchKeyEvent(event)
@@ -165,6 +182,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (::cardMenu.isInitialized && cardMenu.isVisible) return super.onKeyDown(keyCode, event)
         if (soundPanel.isVisible) return super.onKeyDown(keyCode, event)
         if (isConfirmKey(keyCode)) {
             if (event.repeatCount == 0) {
@@ -176,15 +194,17 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
+        if (::cardMenu.isInitialized && cardMenu.isVisible) return super.onKeyLongPress(keyCode, event)
         if (soundPanel.isVisible) return super.onKeyLongPress(keyCode, event)
         if (isConfirmKey(keyCode)) {
-            toggleFavoriteForCurrent()
+            openFavoriteMenu()
             return true
         }
         return super.onKeyLongPress(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (::cardMenu.isInitialized && cardMenu.isVisible) return super.onKeyUp(keyCode, event)
         if (soundPanel.isVisible) return super.onKeyUp(keyCode, event)
         if (isConfirmKey(keyCode)) {
             // Short-press OK while watching is a no-op; long-press already handled.
@@ -200,15 +220,21 @@ class PlayerActivity : AppCompatActivity() {
             keyCode == KeyEvent.KEYCODE_BUTTON_A
     }
 
-    private fun toggleFavoriteForCurrent() {
+    private fun openFavoriteMenu() {
+        if (!::cardMenu.isInitialized) return
         val current = video ?: return
-        val favored = CatalogPrefsStore.toggleFavorite(this, current.id)
+        soundHint.visibility = View.GONE
+        cardMenu.show(current, canMove = false)
+    }
+
+    private fun toggleFavoriteForVideo(target: FireplaceVideo) {
+        val favored = CatalogPrefsStore.toggleFavorite(this, target.id)
         Toast.makeText(
             this,
             if (favored) R.string.favorite_added else R.string.favorite_removed,
             Toast.LENGTH_SHORT,
         ).show()
-        Log.i(TAG, "favorite toggle id=${current.id} favored=$favored")
+        Log.i(TAG, "favorite toggle id=${target.id} favored=$favored")
     }
 
     private fun switchCatalogVideo(delta: Int) {
@@ -225,6 +251,9 @@ class PlayerActivity : AppCompatActivity() {
             "catalog switch delta=$delta from=${current.id}(${current.title}) " +
                 "to=${next.id}(${next.title})",
         )
+        if (::cardMenu.isInitialized && cardMenu.isVisible) {
+            cardMenu.hide()
+        }
         video = next
         LastPlayedStore.setVideoId(this, next.id)
         // Fresh video → reset codec fallback state for the new source.
